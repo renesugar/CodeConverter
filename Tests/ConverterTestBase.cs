@@ -19,7 +19,7 @@ namespace CodeConverter.Tests
 {
     public class ConverterTestBase
     {
-        private bool testCSToVBCommentsByDefault = false;
+        private bool testCSToVBCommentsByDefault = true; // Some exclusions will need to be made in AddLineNumberComments to make this work
 
         public void TestConversionCSharpToVisualBasic(string csharpCode, string expectedVisualBasicCode, bool standaloneStatements = false, CSharpParseOptions csharpOptions = null, VisualBasicParseOptions vbOptions = null)
         {

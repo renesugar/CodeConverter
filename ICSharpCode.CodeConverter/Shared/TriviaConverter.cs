@@ -31,8 +31,6 @@ namespace ICSharpCode.CodeConverter.Shared
 
             destination = WithAnnotations(sourceNode, destination);
 
-            if (sourceNode is CSharpSyntaxNode) return destination;
-
             destination = sourceNode.HasLeadingTrivia
                 ? destination.WithLeadingTrivia(sourceNode.GetLeadingTrivia().ConvertTrivia())
                 : destination;
