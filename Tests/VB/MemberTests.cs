@@ -13,10 +13,10 @@ namespace CodeConverter.Tests.VB
     const int answer = 42;
     int value = 10;
     readonly int v = 15;
-}", @"Class TestClass
+}", @"Friend Class TestClass
     Const answer As Integer = 42
     Private value As Integer = 10
-    ReadOnly v As Integer = 15
+    Private ReadOnly v As Integer = 15
 End Class");
         }
 
@@ -32,7 +32,9 @@ End Class");
         argument2 = default(T2);
         argument3 = default(T3);
     }
-}", @"Class TestClass
+}", @"Imports System.Runtime.InteropServices
+
+Friend Class TestClass
     Public Sub TestMethod(Of T As {Class, New}, T2 As Structure, T3)(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3)
         argument = Nothing
         argument2 = Nothing
@@ -51,7 +53,9 @@ End Class");
     {
         return 0;
     }
-}", @"Class TestClass
+}", @"Imports System.Runtime.InteropServices
+
+Friend Class TestClass
     Public Function TestMethod(Of T As {Class, New}, T2 As Structure, T3)(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3) As Integer
         Return 0
     End Function
@@ -70,7 +74,9 @@ End Class");
         argument2 = default(T2);
         argument3 = default(T3);
     }
-}", @"Class TestClass
+}", @"Imports System.Runtime.InteropServices
+
+Friend Class TestClass
     Public Shared Sub TestMethod(Of T As {Class, New}, T2 As Structure, T3)(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3)
         argument = Nothing
         argument2 = Nothing
@@ -83,10 +89,10 @@ End Class");
         public void TestAbstractMethod()
         {
             TestConversionCSharpToVisualBasic(
-                @"class TestClass
+                @"abstract class TestClass
 {
     public abstract void TestMethod();
-}", @"Class TestClass
+}", @"Friend MustInherit Class TestClass
     Public MustOverride Sub TestMethod()
 End Class");
         }
@@ -113,7 +119,7 @@ class TestSubclass : TestClass
         TestMethod(3);
         System.Console.WriteLine(""Shadowed implementation"");
     }
-}", @"Class TestClass
+}", @"Friend Class TestClass
     Public Sub TestMethod()
     End Sub
 
@@ -121,7 +127,7 @@ class TestSubclass : TestClass
     End Sub
 End Class
 
-Class TestSubclass
+Friend Class TestSubclass
     Inherits TestClass
 
     Public Overloads Sub TestMethod()
@@ -143,37 +149,15 @@ End Class");
         argument2 = default(T2);
         argument3 = default(T3);
     }
-}", @"Class TestClass
+}", @"Imports System.Runtime.InteropServices
+
+Friend Class TestClass
     Public NotOverridable Sub TestMethod(Of T As {Class, New}, T2 As Structure, T3)(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3)
         argument = Nothing
         argument2 = Nothing
         argument3 = Nothing
     End Sub
 End Class");
-        }
-
-        [Fact]
-        public void TestNarrowingWideningConversionOperator()
-        {
-            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class MyInt
-    Public Shared Narrowing Operator CType(i As Integer) As MyInt
-        Return New MyInt()
-    End Operator
-    Public Shared Widening Operator CType(myInt As MyInt) As Integer
-        Return 1
-    End Operator
-End Class"
-                , @"public class MyInt
-{
-    public static explicit operator MyInt(int i)
-    {
-        return new MyInt();
-    }
-    public static implicit operator int(MyInt myInt)
-    {
-        return 1;
-    }
-}");
         }
 
         [Fact]
@@ -185,11 +169,19 @@ End Class"
     public static void TestMethod(this String str)
     {
     }
+
+    public static void TestMethod2Parameters(this String str, Action<string> _)
+    {
+    }
 }", @"Imports System.Runtime.CompilerServices
 
-Module TestClass
+Friend Module TestClass
     <Extension()>
     Sub TestMethod(ByVal str As String)
+    End Sub
+
+    <Extension()>
+    Sub TestMethod2Parameters(ByVal str As String, ByVal __ As Action(Of String))
     End Sub
 End Module");
         }
@@ -207,7 +199,7 @@ static class TestClass
     }
 }", @"Imports System.Runtime.CompilerServices
 
-Module TestClass
+Friend Module TestClass
     <Extension()>
     Sub TestMethod(ByVal str As String)
     End Sub
@@ -229,10 +221,10 @@ End Module");
         get { return this.m_test3; }
         set { this.m_test3 = value; }
     }
-}", @"Class TestClass
+}", @"Friend Class TestClass
     Public Property Test As Integer
 
-    Public Property Test2 As Integer
+    Public ReadOnly Property Test2 As Integer
         Get
             Return 0
         End Get
@@ -252,6 +244,88 @@ End Class");
         }
 
         [Fact]
+        public void TestPropertyWithExpressionBody()
+        {
+            TestConversionCSharpToVisualBasic(
+                @"public class ConversionResult
+{
+    private string _sourcePathOrNull;
+    
+    public string SourcePathOrNull {
+        get => _sourcePathOrNull;
+        set => _sourcePathOrNull = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+}", @"Public Class ConversionResult
+    Private _sourcePathOrNull As String
+
+    Public Property SourcePathOrNull As String
+        Get
+            Return _sourcePathOrNull
+        End Get
+        Set(ByVal value As String)
+            _sourcePathOrNull = If(String.IsNullOrWhiteSpace(value), Nothing, value)
+        End Set
+    End Property
+End Class");
+        }
+
+        [Fact]
+        public void TestOmmittedAccessorsReplacedWithExpressionBody()
+        {
+            TestConversionCSharpToVisualBasic(
+                @"class MyFavColor  
+{  
+    private string[] favColor => new string[] {""Red"", ""Green""};
+    public string this[int index] => favColor[index];
+}  
+", @"Friend Class MyFavColor
+    Private ReadOnly Property favColor As String()
+        Get
+            Return New String() {""Red"", ""Green""}
+        End Get
+    End Property
+
+    Default Public ReadOnly Property Item(ByVal index As Integer) As String
+        Get
+            Return favColor(index)
+        End Get
+    End Property
+End Class");
+        }
+
+        [Fact]
+        public void TestPropertyWithExpressionBodyThatCanBeStatement()
+        {
+            TestConversionCSharpToVisualBasic(
+                @"public class ConversionResult
+{
+    private int _num;
+    
+    public string Num {
+        set => _num++;
+    }
+
+    public string Blanket {
+        set => throw new Exception();
+    }
+}", @"Public Class ConversionResult
+    Private _num As Integer
+
+    Public WriteOnly Property Num As String
+        Set(ByVal value As String)
+            _num += 1
+        End Set
+    End Property
+
+    Public WriteOnly Property Blanket As String
+        Set(ByVal value As String)
+            Throw New Exception()
+        End Set
+    End Property
+End Class");
+        }
+
+        [Fact]
         public void TestPropertyWithAttribute()
         {
             TestConversionCSharpToVisualBasic(
@@ -259,7 +333,7 @@ End Class");
 {
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     int value { get; set; }
-}", @"Class TestClass
+}", @"Friend Class TestClass
     <DatabaseGenerated(DatabaseGeneratedOption.None)>
     Private Property value As Integer
 End Class
@@ -275,8 +349,42 @@ End Class
     public TestClass(out T argument, ref T2 argument2, T3 argument3)
     {
     }
-}", @"Class TestClass(Of T As {Class, New}, T2 As Structure, T3)
+}", @"Imports System.Runtime.InteropServices
+
+Friend Class TestClass(Of T As {Class, New}, T2 As Structure, T3)
     Public Sub New(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3)
+    End Sub
+End Class");
+        }
+
+        [Fact]
+        public void TestConstructorCallingBase()
+        {
+            TestConversionCSharpToVisualBasic(
+                @"public class MyBaseClass
+{
+    public MyBaseClass(object o)
+    {
+    }
+}
+
+public sealed class MyClass 
+ : MyBaseClass 
+{
+	 public MyClass(object o)
+	  : base(o)
+	{
+	}
+}", @"Public Class MyBaseClass
+    Public Sub New(ByVal o As Object)
+    End Sub
+End Class
+
+Public NotInheritable Class [MyClass]
+    Inherits MyBaseClass
+
+    Public Sub New(ByVal o As Object)
+        MyBase.New(o)
     End Sub
 End Class");
         }
@@ -290,7 +398,7 @@ End Class");
     ~TestClass()
     {
     }
-}", @"Class TestClass
+}", @"Friend Class TestClass
     Protected Overrides Sub Finalize()
     End Sub
 End Class");
@@ -303,7 +411,7 @@ End Class");
                 @"class TestClass
 {
     public event EventHandler MyEvent;
-}", @"Class TestClass
+}", @"Friend Class TestClass
     Public Event MyEvent As EventHandler
 End Class");
         }
@@ -328,7 +436,7 @@ class TestClass
     }
 }", @"Imports System
 
-Class TestClass
+Friend Class TestClass
     Private backingField As EventHandler
 
     Public Event MyEvent As EventHandler
@@ -348,19 +456,54 @@ End Class");
             TestConversionCSharpToVisualBasic(
                 @"class TestClass
 {
-    public int this[int index] { get; set; }
-    public int this[string index] {
-        get { return 0; }
-    }
-    int m_test3;
-    public int this[double index] {
-        get { return this.m_test3; }
-        set { this.m_test3 = value; }
-    }
-}", @"Class TestClass
-    Default Public Property Item(ByVal index As Integer) As Integer
+    private int[] _Items;
 
-    Default Public Property Item(ByVal index As String) As Integer
+    public int this[int index]
+    {
+        get
+        {
+            return _Items[index];
+        }
+        set
+        {
+            _Items[index] = value;
+        }
+    }
+
+    public int this[string index]
+    {
+        get
+        {
+            return 0;
+        }
+    }
+
+    private int m_test3;
+
+    public int this[double index]
+    {
+        get
+        {
+            return this.m_test3;
+        }
+        set
+        {
+            this.m_test3 = value;
+        }
+    }
+}", @"Friend Class TestClass
+    Private _Items As Integer()
+
+    Default Public Property Item(ByVal index As Integer) As Integer
+        Get
+            Return _Items(index)
+        End Get
+        Set(ByVal value As Integer)
+            _Items(index) = value
+        End Set
+    End Property
+
+    Default Public ReadOnly Property Item(ByVal index As String) As Integer
         Get
             Return 0
         End Get

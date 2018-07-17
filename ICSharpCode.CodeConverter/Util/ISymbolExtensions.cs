@@ -11,6 +11,8 @@ namespace ICSharpCode.CodeConverter.Util
 #endif
     static class ISymbolExtensions
     {
+        private static readonly string[] TypesToConvertToDateTime = new[] {"DateTime", "DateAndTime" };
+
         /// <summary>
         /// Checks if 'symbol' is accessible from within 'within'.
         /// </summary>
@@ -166,6 +168,67 @@ namespace ICSharpCode.CodeConverter.Util
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+        }
+
+        public static ISymbol ExtractBestMatch(this SymbolInfo info, Func<ISymbol, bool> isMatch = null)
+        {
+            isMatch = isMatch ?? (_ => true);
+            if (info.Symbol == null && info.CandidateSymbols.Length == 0)
+                return null;
+            if (info.Symbol != null)
+                return info.Symbol;
+            if (info.CandidateSymbols.Length == 1)
+                return info.CandidateSymbols.FirstOrDefault(isMatch);
+            return null;
+        }
+
+        public static string ToMinimalCSharpDisplayString(this ISymbol symbol, SemanticModel vbSemanticModel, int position, SymbolDisplayFormat format = null)
+        {
+            if (TryGetSpecialVBTypeConversion(symbol, out var cSharpDisplayString)) return cSharpDisplayString;
+            return symbol.ToMinimalDisplayString(vbSemanticModel, position, format);
+        }
+
+        public static string ToCSharpDisplayString(this ISymbol symbol, SymbolDisplayFormat format = null)
+        {
+            if (TryGetSpecialVBTypeConversion(symbol, out var cSharpDisplayString)) return cSharpDisplayString;
+
+            return symbol.ToDisplayString(format);
+        }
+
+        private static bool TryGetSpecialVBTypeConversion(ISymbol symbol, out string cSharpDisplayString)
+        {
+            var containingNamespace = symbol?.ContainingNamespace?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+            if (containingNamespace == "Microsoft.VisualBasic" || containingNamespace == "System") {
+                if (symbol is ITypeSymbol && TypesToConvertToDateTime.Contains(symbol.Name)) {
+                    {
+                        cSharpDisplayString = "DateTime";
+                        return true;
+                    }
+                } else if (TypesToConvertToDateTime.Contains(symbol.ContainingType?.Name)) {
+                    {
+                        cSharpDisplayString = "DateTime" + "." + symbol.Name;
+                        return true;
+                    }
+                }
+            }
+
+            cSharpDisplayString = null;
+            return false;
+        }
+
+        private static bool ShouldConvertToDateTime(ITypeSymbol symbol, string fullName)
+        {
+            return TypesToConvertToDateTime.Contains(symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
+        }
+
+        public static bool IsPartialImplementation(this ISymbol declaredSymbol)
+        {
+            return declaredSymbol is IMethodSymbol ms && ms.PartialDefinitionPart != null;
+        }
+
+        public static bool IsPartialDefinition(this ISymbol declaredSymbol)
+        {
+            return declaredSymbol is IMethodSymbol ms && ms.PartialImplementationPart != null;
         }
     }
 }

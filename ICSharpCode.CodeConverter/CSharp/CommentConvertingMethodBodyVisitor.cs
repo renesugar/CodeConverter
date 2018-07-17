@@ -1,40 +1,60 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using ICSharpCode.CodeConverter.Shared;
 using ICSharpCode.CodeConverter.Util;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
-using StatementSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.StatementSyntax;
-using TryStatementSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.TryStatementSyntax;
+using CSSyntax = Microsoft.CodeAnalysis.CSharp.Syntax;
+using SyntaxFactory = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace ICSharpCode.CodeConverter.CSharp
 {
-    public class CommentConvertingMethodBodyVisitor : VisualBasicSyntaxVisitor<SyntaxList<StatementSyntax>>
+    public class CommentConvertingMethodBodyVisitor : VisualBasicSyntaxVisitor<SyntaxList<CSSyntax.StatementSyntax>>
     {
-        private readonly VisualBasicSyntaxVisitor<SyntaxList<StatementSyntax>> wrappedVisitor;
-        private readonly TriviaConverter triviaConverter;
+        private readonly VisualBasicSyntaxVisitor<SyntaxList<CSSyntax.StatementSyntax>> _wrappedVisitor;
+        private readonly TriviaConverter _triviaConverter;
 
-        public CommentConvertingMethodBodyVisitor(VisualBasicSyntaxVisitor<SyntaxList<StatementSyntax>> wrappedVisitor, TriviaConverter triviaConverter)
+        public CommentConvertingMethodBodyVisitor(VisualBasicSyntaxVisitor<SyntaxList<CSSyntax.StatementSyntax>> wrappedVisitor, TriviaConverter triviaConverter)
         {
-            this.wrappedVisitor = wrappedVisitor;
-            this.triviaConverter = triviaConverter;
+            this._wrappedVisitor = wrappedVisitor;
+            this._triviaConverter = triviaConverter;
         }
 
-        public override SyntaxList<StatementSyntax> DefaultVisit(SyntaxNode node)
+        public override SyntaxList<CSSyntax.StatementSyntax> DefaultVisit(SyntaxNode node)
         {
-            var cSharpSyntaxNodes = wrappedVisitor.Visit(node);
+            try {
+                return ConvertWithTrivia(node);
+            } catch (Exception e) {
+                return SyntaxFactory.SingletonList(CreateErrorCommentStatement(node, e));
+            }
+        }
+
+        private SyntaxList<CSSyntax.StatementSyntax> ConvertWithTrivia(SyntaxNode node)
+        {
+            var convertedNodes = _wrappedVisitor.Visit(node);
+            if (!convertedNodes.Any()) return convertedNodes;
             // Port trivia to the last statement in the list
-            var lastWithConvertedTrivia = triviaConverter.PortConvertedTrivia(node, cSharpSyntaxNodes.LastOrDefault());
-            return cSharpSyntaxNodes.Replace(cSharpSyntaxNodes.LastOrDefault(), lastWithConvertedTrivia);
+            var lastWithConvertedTrivia = _triviaConverter.PortConvertedTrivia(node, convertedNodes.LastOrDefault());
+            return convertedNodes.Replace(convertedNodes.LastOrDefault(), lastWithConvertedTrivia);
         }
 
-        public override SyntaxList<StatementSyntax> VisitTryBlock(TryBlockSyntax node)
+        private CSSyntax.StatementSyntax CreateErrorCommentStatement(SyntaxNode node, Exception exception)
         {
-            var cSharpSyntaxNodes = wrappedVisitor.Visit(node);
-            var tryStatementCs = (TryStatementSyntax)cSharpSyntaxNodes.Single();
+            var errorDescription = node.DescribeConversionError(exception);
+            var commentedText = "/* " + errorDescription + " */";
+            return SyntaxFactory.EmptyStatement()
+                .WithTrailingTrivia(SyntaxFactory.Comment(commentedText))
+                .WithAdditionalAnnotations(new SyntaxAnnotation(AnnotationConstants.ConversionErrorAnnotationKind, exception.ToString()));
+        }
+
+        public override SyntaxList<CSSyntax.StatementSyntax> VisitTryBlock(TryBlockSyntax node)
+        {
+            var cSharpSyntaxNodes = _wrappedVisitor.Visit(node);
+            var tryStatementCs = (CSSyntax.TryStatementSyntax)cSharpSyntaxNodes.Single();
             var tryTokenCs = tryStatementCs.TryKeyword;
             var tryStatementWithTryTrivia = tryStatementCs.ReplaceToken(tryTokenCs, tryTokenCs.WithConvertedTriviaFrom(node.TryStatement));
-            var tryStatementWithAllTrivia = triviaConverter.PortConvertedTrivia(node, tryStatementWithTryTrivia);
+            var tryStatementWithAllTrivia = _triviaConverter.PortConvertedTrivia(node, tryStatementWithTryTrivia);
             return cSharpSyntaxNodes.Replace(tryStatementCs, tryStatementWithAllTrivia);
         }
     }

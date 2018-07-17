@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ICSharpCode.CodeConverter.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 using VBSyntaxFactory = Microsoft.CodeAnalysis.VisualBasic.SyntaxFactory;
 using VBSyntaxKind = Microsoft.CodeAnalysis.VisualBasic.SyntaxKind;
@@ -209,6 +212,14 @@ namespace ICSharpCode.CodeConverter.Util
             where TSyntaxNode : SyntaxNode
         {
             return (TSyntaxNode)nodes.FindInnermostCommonNode(n => n is TSyntaxNode);
+        }
+
+        public static ISymbol GetEnclosingDeclaredTypeSymbol(this SyntaxNode node, SemanticModel semanticModel)
+        {
+            var typeBlockSyntax = (SyntaxNode) node.GetAncestor<Microsoft.CodeAnalysis.VisualBasic.Syntax.TypeBlockSyntax>()
+                ?? node.GetAncestor<TypeSyntax>();
+            if (typeBlockSyntax == null) return null;
+            return semanticModel.GetDeclaredSymbol(typeBlockSyntax);
         }
 
         /// <summary>
@@ -511,7 +522,6 @@ namespace ICSharpCode.CodeConverter.Util
             return root;
         }
 
-
         public static bool IsKind(this SyntaxNode node, SyntaxKind kind1, SyntaxKind kind2)
         {
             if (node == null) {
@@ -574,7 +584,7 @@ namespace ICSharpCode.CodeConverter.Util
                 m => m.GetModifiers().Any(SyntaxKind.UnsafeKeyword));
         }
 
-        public static bool IsInStaticContext(this SyntaxNode node)
+        public static bool IsInStaticCsContext(this SyntaxNode node)
         {
             // this/base calls are always static.
             if (node.FirstAncestorOrSelf<ConstructorInitializerSyntax>() != null) {
@@ -856,8 +866,8 @@ namespace ICSharpCode.CodeConverter.Util
                 return SyntaxFactory.SyntaxTrivia(SyntaxKind.SingleLineCommentTrivia, $"// {t.GetCommentText()}");
             if (t.IsKind(VBSyntaxKind.DocumentationCommentTrivia)) {
                 var previousWhitespace = t.GetPreviousTrivia(t.SyntaxTree, CancellationToken.None).ToString();
-                var commentTextLines = t.GetCommentText().Replace("\r\n", "\r").Split('\r');
-                var outputCommentText = "/// " + string.Join($"\r\n{previousWhitespace}/// ", commentTextLines) + Environment.NewLine;
+                var commentTextLines = t.GetCommentText().Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+                var outputCommentText = "/// " + String.Join($"\r\n{previousWhitespace}/// ", commentTextLines) + Environment.NewLine;
                 return SyntaxFactory.SyntaxTrivia(SyntaxKind.SingleLineCommentTrivia, outputCommentText); //It's always single line...even when it has multiple lines
             }
 
@@ -873,9 +883,9 @@ namespace ICSharpCode.CodeConverter.Util
             }
 
             //Each of these would need its own method to recreate for C# with the right structure probably so let's just warn about them for now.
-            var convertedKind = VBToCSSyntaxKinds.FirstOrNullable(kvp => t.IsKind(kvp.Key));
+            var convertedKind = t.GetCSKind();
             return convertedKind.HasValue
-                ? SyntaxFactory.Comment($"/* TODO ERROR: Skipped {convertedKind.Value.Key} */")
+                ? SyntaxFactory.Comment($"/* TODO ERROR: Skipped {convertedKind.Value} */")
                 : default(SyntaxTrivia);
         }
 
@@ -885,10 +895,10 @@ namespace ICSharpCode.CodeConverter.Util
                 return VBSyntaxFactory.SyntaxTrivia(VBSyntaxKind.CommentTrivia, $"' {t.GetCommentText()}");
             if (t.IsKind(CSSyntaxKind.SingleLineCommentTrivia)) {
                 var previousWhitespace = t.GetPreviousTrivia(t.SyntaxTree, CancellationToken.None).ToString();
-                var commentTextLines = t.GetCommentText().Replace("\r\n", "\r").Split('\r');
+                var commentTextLines = t.GetCommentText().Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
                 var multiLine = commentTextLines.Count() > 1;
                 var outputCommentText = multiLine
-                    ? "''' " + string.Join($"\r\n{previousWhitespace}/// ", commentTextLines)
+                    ? "''' " + String.Join($"\r\n{previousWhitespace}''' ", commentTextLines)
                     : $"' {commentTextLines.Single()}";
                 return VBSyntaxFactory.SyntaxTrivia(VBSyntaxKind.DocumentationCommentTrivia,
                     outputCommentText);
@@ -905,9 +915,9 @@ namespace ICSharpCode.CodeConverter.Util
                 return VBSyntaxFactory.SyntaxTrivia(VBSyntaxKind.EndOfLineTrivia, t.ToString());
             }
 
-            var convertedKind = CSToVBSyntaxKinds.FirstOrNullable(kvp => t.IsKind(kvp.Key));
+            var convertedKind = t.GetVBKind();
             return convertedKind.HasValue
-                ? VBSyntaxFactory.CommentTrivia($"' TODO ERROR: Skipped {convertedKind.Value.Key}")
+                ? VBSyntaxFactory.CommentTrivia($"' TODO ERROR: Skipped {convertedKind.Value}")
                 : default(SyntaxTrivia);
         }
 
@@ -1003,7 +1013,6 @@ namespace ICSharpCode.CodeConverter.Util
         {
             return node.IsAnyLambda() || node.IsKind(SyntaxKind.AnonymousMethodExpression);
         }
-
 
         //        /// <summary>
         //        /// Breaks up the list of provided nodes, based on how they are interspersed with pp
@@ -1238,51 +1247,6 @@ namespace ICSharpCode.CodeConverter.Util
         }
 
         /// <summary>
-        /// Look inside a trivia list for a skipped token that contains the given position.
-        /// </summary>
-        private static readonly Func<SyntaxTriviaList, int, SyntaxToken> s_findSkippedTokenForward =
-            (l, p) => FindTokenHelper.FindSkippedTokenForward(GetSkippedTokens(l), p);
-
-        /// <summary>
-        /// Look inside a trivia list for a skipped token that contains the given position.
-        /// </summary>
-        private static readonly Func<SyntaxTriviaList, int, SyntaxToken> s_findSkippedTokenBackward =
-            (l, p) => FindTokenHelper.FindSkippedTokenBackward(GetSkippedTokens(l), p);
-
-        private static readonly Dictionary<VBSyntaxKind, SyntaxKind> VBToCSSyntaxKinds = new Dictionary<VBSyntaxKind, SyntaxKind> {
-            {VBSyntaxKind.SkippedTokensTrivia, SyntaxKind.SkippedTokensTrivia},
-            {VBSyntaxKind.DisabledTextTrivia, SyntaxKind.DisabledTextTrivia},
-            {VBSyntaxKind.ConstDirectiveTrivia, SyntaxKind.DefineDirectiveTrivia}, // Just a guess
-            {VBSyntaxKind.IfDirectiveTrivia, SyntaxKind.IfDirectiveTrivia},
-            {VBSyntaxKind.ElseIfDirectiveTrivia, SyntaxKind.ElifDirectiveTrivia},
-            {VBSyntaxKind.ElseDirectiveTrivia, SyntaxKind.ElseDirectiveTrivia},
-            {VBSyntaxKind.EndIfDirectiveTrivia, SyntaxKind.EndIfDirectiveTrivia},
-            //{VBSyntaxKind.RegionDirectiveTrivia, SyntaxKind.RegionDirectiveTrivia}, Oh no I accidentally disabled regions :O ;)
-            //{VBSyntaxKind.EndRegionDirectiveTrivia, SyntaxKind.EndRegionDirectiveTrivia},
-            {VBSyntaxKind.EnableWarningDirectiveTrivia, SyntaxKind.WarningDirectiveTrivia},
-            {VBSyntaxKind.DisableWarningDirectiveTrivia, SyntaxKind.WarningDirectiveTrivia},
-            {VBSyntaxKind.ReferenceDirectiveTrivia, SyntaxKind.ReferenceDirectiveTrivia},
-            {VBSyntaxKind.BadDirectiveTrivia, SyntaxKind.BadDirectiveTrivia},
-            {VBSyntaxKind.ConflictMarkerTrivia, SyntaxKind.ConflictMarkerTrivia},
-            {VBSyntaxKind.ExternalSourceDirectiveTrivia, SyntaxKind.LoadDirectiveTrivia}, //Just a guess
-            {VBSyntaxKind.ExternalChecksumDirectiveTrivia, SyntaxKind.LineDirectiveTrivia}, // Even more random guess
-        };
-
-        private static readonly Dictionary<SyntaxKind, VBSyntaxKind> CSToVBSyntaxKinds = 
-            VBToCSSyntaxKinds
-                .ToLookup(kvp => kvp.Value, kvp => kvp.Key)
-                .ToDictionary(g => g.Key, g => g.First());
-
-        /// <summary>
-        /// return only skipped tokens
-        /// </summary>
-        private static IEnumerable<SyntaxToken> GetSkippedTokens(SyntaxTriviaList list)
-        {
-            return list.Where(trivia => trivia.RawKind == (int)SyntaxKind.SkippedTokensTrivia)
-                .SelectMany(t => ((SkippedTokensTriviaSyntax)t.GetStructure()).Tokens);
-        }
-
-        /// <summary>
         /// If the position is inside of token, return that token; otherwise, return the token to the right.
         /// </summary>
         public static SyntaxToken FindTokenOnRightOfPosition(
@@ -1292,7 +1256,7 @@ namespace ICSharpCode.CodeConverter.Util
             bool includeDirectives = false,
             bool includeDocumentationComments = false)
         {
-            var skippedTokenFinder = includeSkipped ? s_findSkippedTokenForward : (Func<SyntaxTriviaList, int, SyntaxToken>)null;
+            var skippedTokenFinder = includeSkipped ? SyntaxTriviaExtensions.s_findSkippedTokenForward : (Func<SyntaxTriviaList, int, SyntaxToken>)null;
 
             return FindTokenHelper.FindTokenOnRightOfPosition<CompilationUnitSyntax>(
                 root, position, skippedTokenFinder, includeSkipped, includeDirectives, includeDocumentationComments);
@@ -1711,5 +1675,31 @@ namespace ICSharpCode.CodeConverter.Util
                 node.IsParentKind(SyntaxKind.DelegateDeclaration);
         }
 
+        public static SyntaxTree WithAnnotatedNode(this SyntaxNode root, SyntaxNode selectedNode, string annotationKind, string annotationData = "")
+        {
+            var annotatatedNode =
+                selectedNode.WithAdditionalAnnotations(new SyntaxAnnotation(annotationKind, annotationData));
+            return root.ReplaceNode(selectedNode, annotatatedNode).SyntaxTree.WithFilePath(root.SyntaxTree.FilePath);
+        }
+
+        public static string GetBriefNodeDescription(this SyntaxNode node)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"'{node.ToString().Truncate()}' at character {node.SpanStart}");
+            return sb.ToString();
+        }
+
+        public static string DescribeConversionError(this SyntaxNode node, Exception e)
+        {
+            return $"Cannot convert {node.GetType().Name}, {e}{Environment.NewLine}{Environment.NewLine}" +
+                $"Input: {Environment.NewLine}{node.ToFullString()}{Environment.NewLine}";
+        }
+
+        private static string Truncate(this string input, int maxLength = 30, string truncationIndicator = "...")
+        {
+            input = input.Replace(Environment.NewLine, "\\r\\n").Replace("    ", " ").Replace("\t", " ");
+            if (input.Length <= maxLength) return input;
+            return input.Substring(0, maxLength - truncationIndicator.Length) + truncationIndicator;
+        }
     }
 }

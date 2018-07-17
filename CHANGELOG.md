@@ -1,6 +1,79 @@
 # Change Log
 All notable changes to the code converter will be documented here.
 
+# 5.8.0 - 26/06/2018
+* Move options lower down in the context menus so they aren't in the way 
+
+### VB -> C#
+* Handle WithEvents fields without initializers
+* In lambda, use parentheses around single explicitly typed parameter
+* Convert LocalDeclarationStatementSyntax
+* Default parameter "value" now has the correct case
+* Multiline xml doc comment conversion bugfix
+
+### C# -> VB
+* Interfaces "implements" clause now converted
+* Shared no longer appears on Module members
+* Fixed .Name bug with anonymous object creation
+* Use Is and IsNot for reference type comparison
+
+# 5.7.0 - 08/05/2018
+* Update to .NET Standard 2.0
+* Convert solution and project files
+* Added convert and copy to clipboard into options
+ 
+### VB -> C#
+* Convert WithEvents/Handles
+* Convert `Handles` and `WithEvents` similarly to the VB compiler
+* Handle expressions in Select Case
+* Ensure all parts of a partial class have the partial modifier
+* Handle missing optional arguments
+* Increase number of default global imports for web conversion
+* Default properties now converted
+
+### C# -> VB
+* Fix DeclarationExpressions without a type throwing exception
+* Convert Throw Expressions to multi-line lambda function
+* Convert properties with no accessors
+* Fix error converting ObjectCollectionInitializerSyntax within object initializer
+* Escape predefined if they are used for the name of declaration
+
+# 5.6.3 - 09/04/2018
+
+* Improve support for sub-class snippets through the website
+* Best effort conversion with errors as comments inline
+* Tidy up duplicate import/using statements
+
+### VB -> C#
+* Using statements and array initialization improvements
+* Convert select case expressions
+* Fix for multi-parameter extension methods
+* Convert single line void delegates 
+* Fix array initialization incorrect conversion bugs
+* Convert operator overloads
+* Overestimate when a method should be invoked with no parameters
+* Remove global namespace in conversion
+* Add Imports System.Runtime.InteropServices when convering an out parameter
+* Support Erase and Redim Preserve
+* Convert select case expressions
+* Extend support for converting with blocks
+
+### C# -> VB
+* Convert C# 7.0 features: "is pattern", throw and declaration expressions
+* Convert expression bodies
+* Fix to ensure Case Else always comes last in a Select statement
+* Convert base class constructor call
+* Fix convert char from integer cast
+* Convert hex literals to hex literals (rather than just integers)
+* Fix to avoid using "_" as a parameter name
+* Fix for loop variable missing declaration and initialization
+* Convert declare to extern
+* Fix to improve accuracy of adding AddressOf
+* Convert block syntax
+* Convert empty statement
+* Fix to avoid single line if-else statement's conversion causing compilation error
+* Fix to avoid delegate with no parameters throwing NullReferenceException
+
 ## 5.6.2 - 16/03/2018
 
 ### VB -> C#

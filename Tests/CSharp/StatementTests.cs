@@ -18,12 +18,7 @@ namespace CodeConverter.Tests.CSharp
         Do
         Loop While True
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -51,12 +46,7 @@ class TestClass
         Dim b As Integer
         b = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -73,12 +63,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -94,12 +79,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -116,12 +96,7 @@ class TestClass
         Dim b As String
         b = New String(""test"")
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -138,12 +113,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As String = New String(""test"")
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -159,12 +129,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b = New String(""test"")
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -180,16 +145,55 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer()
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
         int[] b;
+    }
+}");
+        }
+
+        [Fact]
+        public void ArrayEraseAndRedimStatement()
+        {
+            // One statement turns into two, so can't auto-test comments
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class TestClass
+    Shared Function TestMethod(numArray As Integer(), numArray2 As Integer()) As Integer()
+        ReDim numArray(3)
+        Erase numArray
+        numArray2(1) = 1
+        ReDim Preserve numArray(5), numArray2(5)
+        Dim y(6, 5) As Integer
+        y(2,3) = 1
+        ReDim Preserve y(6,8)
+        Return numArray2
+    End Function
+End Class", @"using System;
+
+public class TestClass
+{
+    public static int[] TestMethod(int[] numArray, int[] numArray2)
+    {
+        numArray = new int[4];
+        numArray = null;
+        numArray2[1] = 1;
+        var oldNumArray = numArray;
+        numArray = new int[6];
+        if (oldNumArray != null)
+            Array.Copy(oldNumArray, numArray, Math.Min(6, oldNumArray.Length));
+        var oldNumArray2 = numArray2;
+        numArray2 = new int[6];
+        if (oldNumArray2 != null)
+            Array.Copy(oldNumArray2, numArray2, Math.Min(6, oldNumArray2.Length));
+        int[,] y = new int[7, 6];
+        y[2, 3] = 1;
+        var oldY = y;
+        y = new int[7, 9];
+        if (oldY != null)
+            for (var i = 0; i <= oldY.Length / oldY.GetLength(1) - 1; ++i)
+                Array.Copy(oldY, i * oldY.GetLength(1), y, i * y.GetLength(1), Math.Min(oldY.GetLength(1), y.GetLength(1)));
+        return numArray2;
     }
 }");
         }
@@ -201,12 +205,7 @@ class TestClass
     Private Sub TestMethod()
         End
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -222,12 +221,7 @@ class TestClass
     Private Sub TestMethod()
         Stop
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -243,22 +237,53 @@ class TestClass
     Private Sub TestMethod()
         With New System.Text.StringBuilder
             .Capacity = 20
-            .Length = 0
+            ?.Length = 0
         End With
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
         {
             var withBlock = new System.Text.StringBuilder();
             withBlock.Capacity = 20;
-            withBlock.Length = 0;
+            withBlock?.Length = 0;
+        }
+    }
+}");
+        }
+
+        [Fact]
+        public void WithBlock2()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Imports System.Data.SqlClient
+
+Class TestClass
+    Private Sub Save()
+        Using cmd As SqlCommand = new SqlCommand()
+            With cmd
+            .ExecuteNonQuery()
+            ?.ExecuteNonQuery()
+            .ExecuteNonQuery
+            ?.ExecuteNonQuery
+            End With
+        End Using
+    End Sub
+End Class", @"using System.Data.SqlClient;
+
+class TestClass
+{
+    private void Save()
+    {
+        using (SqlCommand cmd = new SqlCommand())
+        {
+            {
+                var withBlock = cmd;
+                withBlock.ExecuteNonQuery();
+                withBlock?.ExecuteNonQuery();
+                withBlock.ExecuteNonQuery();
+                withBlock?.ExecuteNonQuery();
+            }
         }
     }
 }");
@@ -279,12 +304,7 @@ class TestClass
             .Length = withBlock
         End With
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -309,12 +329,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer() = {1, 2, 3}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -330,12 +345,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b = {1, 2, 3}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -351,12 +361,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer() = New Integer() {1, 2, 3}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -372,12 +377,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer() = New Integer(2) {1, 2, 3}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -393,12 +393,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer(,)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -407,23 +402,18 @@ class TestClass
 }");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultidimensionalArrayInitializationStatement()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub TestMethod()
         Dim b As Integer(,) = {{1, 2}, {3, 4}}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
-        int[,] b = { { 1, 2 }, { 3, 4 } };
+        int[,] b = new[] { { 1, 2 }, { 3, 4 } };
     }
 }");
         }
@@ -435,12 +425,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer(,) = New Integer(,) {{1, 2}, {3, 4}}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -450,22 +435,27 @@ class TestClass
         }
 
         [Fact]
-        public void MultidimensionalArrayInitializationStatementWithLengths()
+        public void MultidimensionalArrayInitializationStatementWithAndWithoutLengths()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub TestMethod()
+        Dim a As Integer(,) = New Integer(,) {{1, 2}, {3, 4}}
         Dim b As Integer(,) = New Integer(1, 1) {{1, 2}, {3, 4}}
+        Dim c as Integer(,,) = New Integer(,,) {{{1}}}
+        Dim d as Integer(,,) = New Integer(0, 0, 0) {{{1}}}
+        Dim e As Integer()(,) = New Integer()(,) {}
+        Dim f As Integer()(,) = New Integer(-1)(,) {}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
+        int[,] a = new int[,] { { 1, 2 }, { 3, 4 } };
         int[,] b = new int[2, 2] { { 1, 2 }, { 3, 4 } };
+        int[,,] c = new int[,,] { { { 1 } } };
+        int[,,] d = new int[1, 1, 1] { { { 1 } } };
+        int[][,] e = new int[][,] { };
+        int[][,] f = new int[0][,] { };
     }
 }");
         }
@@ -477,12 +467,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer()()
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -498,12 +483,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer()() = {New Integer() {1, 2}, New Integer() {3, 4}}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -517,18 +497,13 @@ class TestClass
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub TestMethod()
-        Dim b As Integer()() = New Integer()() {New Integer() {1, 2}, New Integer() {3, 4}}
+        Dim b = New Integer()() {New Integer() {1}}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
-        int[][] b = new int[][] { new int[] { 1, 2 }, new int[] { 3, 4 } };
+        var b = new int[][] { new int[] { 1 } };
     }
 }");
         }
@@ -540,12 +515,7 @@ class TestClass
     Private Sub TestMethod()
         Dim b As Integer()() = New Integer(1)() {New Integer() {1, 2}, New Integer() {3, 4}}
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -581,6 +551,42 @@ End Class", @"class Test
         }
 
         [Fact]
+        public void DeclareStatement()
+        {
+            // Intentionally uses a type name with a different casing as the loop variable, i.e. "process" to test name resolution
+            TestConversionVisualBasicToCSharp(@"Imports System.Diagnostics
+
+Public Class AcmeClass
+    Private Declare Function SetForegroundWindow Lib ""user32"" (ByVal hwnd As Int32) As Long
+
+    Public Shared Sub Main()
+        For Each process In Process.GetProcesses().Where(Function(p) Not String.IsNullOrEmpty(p.MainWindowTitle))
+            SetForegroundWindow(process.MainWindowHandle.ToInt32())
+            Thread.Sleep(1000)
+        Next
+    End Sub
+End Class"
+                , @"using System;
+using System.Diagnostics;
+using System.Linq;
+
+public class AcmeClass
+{
+    [System.Runtime.InteropServices.DllImport(""user32"")]
+    private static extern long SetForegroundWindow(Int32 hwnd);
+
+    public static void Main()
+    {
+        foreach (var process in Process.GetProcesses().Where(p => !string.IsNullOrEmpty(p.MainWindowTitle)))
+        {
+            SetForegroundWindow(process.MainWindowHandle.ToInt32());
+            Thread.Sleep(1000);
+        }
+    }
+}");
+        }
+
+        [Fact]
         public void IfStatement()
         {
             TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
@@ -597,12 +603,7 @@ End Class", @"class Test
             b = 3
         End If
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod(int a)
     {
@@ -624,46 +625,39 @@ class TestClass
         public void NestedBlockStatementsKeepSameNesting()
         {
             TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
-    Shared Function FindTextInCol(w As Worksheet, pTitleRow As Integer, startCol As Integer, needle As String) As Integer
+    Shared Function FindTextInCol(w As String, pTitleRow As Integer, startCol As Integer, needle As String) As Integer
 
-        For c As Integer = startCol To w.Cells.MaxDataColumn
+        For c As Integer = startCol To w.Length
             If needle = """" Then
-                If String.IsNullOrWhiteSpace(w.Cells(pTitleRow, c).StringValue) Then
+                If String.IsNullOrWhiteSpace(w(c).ToString) Then
                     Return c
                 End If
             Else
-                If w.Cells(pTitleRow, c).StringValue = needle Then
+                If w(c).ToString = needle Then
                     Return c
                 End If
             End If
         Next
         Return -1
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
-    public static int FindTextInCol(Worksheet w, int pTitleRow, int startCol, string needle)
+    public static int FindTextInCol(string w, int pTitleRow, int startCol, string needle)
     {
-        for (int c = startCol; c <= w.Cells.MaxDataColumn; c++)
+        for (int c = startCol; c <= w.Length; c++)
         {
             if (needle == """")
             {
-                if (string.IsNullOrWhiteSpace(w.Cells(pTitleRow, c).StringValue))
+                if (string.IsNullOrWhiteSpace(w[c].ToString()))
                     return c;
             }
-            else if (w.Cells(pTitleRow, c).StringValue == needle)
+            else if (w[c].ToString() == needle)
                 return c;
         }
         return -1;
     }
 }");
         }
-
-
 
         [Fact]
         public void WhileStatement()
@@ -679,12 +673,7 @@ class TestClass
             b = 1
         End While
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -704,6 +693,40 @@ class TestClass
         }
 
         [Fact]
+        public void SimpleDoStatement()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Private Sub TestMethod()
+        Dim b As Integer
+        b = 0
+
+        Do
+            If b = 2 Then Continue Do
+            If b = 3 Then Exit Do
+            b = 1
+        Loop
+    End Sub
+End Class", @"class TestClass
+{
+    private void TestMethod()
+    {
+        int b;
+        b = 0;
+
+        do
+        {
+            if (b == 2)
+                continue;
+            if (b == 3)
+                break;
+            b = 1;
+        }
+        while (true);
+    }
+}");
+        }
+
+        [Fact]
         public void DoWhileStatement()
         {
             TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
@@ -717,12 +740,41 @@ class TestClass
             b = 1
         Loop While b = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"class TestClass
+{
+    private void TestMethod()
+    {
+        int b;
+        b = 0;
 
-class TestClass
+        do
+        {
+            if (b == 2)
+                continue;
+            if (b == 3)
+                break;
+            b = 1;
+        }
+        while (b == 0);
+    }
+}");
+        }
+
+        [Fact]
+        public void IncompleteStatement()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Private Sub TestMethod()
+        Dim b As Integer
+        b = 0
+
+        Do
+            If b = 2 Then Continue Do
+            If b = 3 Then Exit Do
+            b = 1
+        Loop While b = 0
+    End Sub
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -752,12 +804,7 @@ class TestClass
             If val = 3 Then Exit For
         Next
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod(int[] values)
     {
@@ -782,12 +829,7 @@ class TestClass
             If val = 3 Then Exit For
         Next
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod(int[] values)
     {
@@ -814,9 +856,6 @@ class TestClass
         End SyncLock
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -834,19 +873,15 @@ class TestClass
         [Fact]
         public void ForWithSingleStatement()
         {
-            TestConversionVisualBasicToCSharp(@"Class TestClass
+            // Comment from "Next" gets pushed up to previous line
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
     Private Sub TestMethod()
         Dim b, s As Integer()
         For i = 0 To [end]
             b(i) = s(i)
         Next
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -860,19 +895,15 @@ class TestClass
         [Fact]
         public void ForWithBlock()
         {
-            TestConversionVisualBasicToCSharp(@"Class TestClass
+            // Comment from "Next" gets pushed up to previous line
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
     Private Sub TestMethod()
         Dim b, s As Integer()
         For i = 0 To [end] - 1
             b(i) = s(i)
         Next
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -922,9 +953,6 @@ Finish:
         Console.ReadKey()
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class GotoTest1
 {
@@ -975,9 +1003,6 @@ class GotoTest1
         If nullObject Is Nothing Then Throw New ArgumentNullException(NameOf(nullObject))
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -985,6 +1010,30 @@ class TestClass
     {
         if (nullObject == null)
             throw new ArgumentNullException(nameof(nullObject));
+    }
+}");
+        }
+
+        [Fact]
+        public void CallStatement()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass
+    Private Sub TestMethod()
+        Call (Sub() Console.Write(""Hello""))
+        Call (Sub() Console.Write(""Hello""))()
+        Call TestMethod
+        Call TestMethod()
+    End Sub
+End Class", @"using System;
+
+class TestClass
+{
+    private void TestMethod()
+    {
+        (() => Console.Write(""Hello""))();
+        (() => Console.Write(""Hello""))();
+        TestMethod();
+        TestMethod();
     }
 }");
         }
@@ -1008,9 +1057,6 @@ class TestClass
     Private Sub MyHandler(ByVal sender As Object, ByVal e As EventArgs)
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -1049,9 +1095,6 @@ class TestClass
         End Select
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -1079,6 +1122,116 @@ class TestClass
                     break;
                 }
         }
+    }
+}");
+        }
+
+        [Fact]
+        public void SelectCaseWithExpression()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class TestClass
+    Shared Function TimeAgo(daysAgo As Integer) As String
+        Select Case daysAgo
+            Case 0 To 3, 4, Is >= 5, Is < 6, Is <= 7
+                Return ""this week""
+            Case Is > 0
+                Return daysAgo \ 7 & "" weeks ago""
+            Case Else
+                Return ""in the future""
+        End Select
+    End Function
+End Class", @"public class TestClass
+{
+    public static string TimeAgo(int daysAgo)
+    {
+        switch (daysAgo)
+        {
+            case object _ when 0 <= daysAgo && daysAgo <= 3:
+            case 4:
+            case object _ when daysAgo >= 5:
+            case object _ when daysAgo < 6:
+            case object _ when daysAgo <= 7:
+                {
+                    return ""this week"";
+                }
+
+            case object _ when daysAgo > 0:
+                {
+                    return daysAgo / 7 + "" weeks ago"";
+                }
+
+            default:
+                {
+                    return ""in the future"";
+                }
+        }
+    }
+}");
+        }
+
+        [Fact]
+        public void SelectCaseWithExpression2()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class TestClass2
+    Function CanDoWork(Something As Object) As Boolean
+        Select Case True
+            Case Today.DayOfWeek = DayOfWeek.Saturday Or Today.DayOfWeek = DayOfWeek.Sunday
+                ' we do not work on weekends
+                Return False
+            Case Not IsSqlAlive()
+                ' Database unavailable
+                Return False
+            Case TypeOf Something Is Integer
+                ' Do something with the Integer
+                Return True
+            Case Else
+                ' Do something else 
+                Return False
+        End Select
+    End Function
+
+    Private Function IsSqlAlive() As Boolean
+        ' Do something to test SQL Server
+        Return True
+    End Function
+End Class", @"using System;
+
+public class TestClass2
+{
+    public bool CanDoWork(object Something)
+    {
+        switch (true)
+        {
+            case object _ when DateTime.Today.DayOfWeek == DayOfWeek.Saturday | DateTime.Today.DayOfWeek == DayOfWeek.Sunday:
+                {
+                    // we do not work on weekends
+                    return false;
+                }
+
+            case object _ when !IsSqlAlive():
+                {
+                    // Database unavailable
+                    return false;
+                }
+
+            case object _ when Something is int:
+                {
+                    // Do something with the Integer
+                    return true;
+                }
+
+            default:
+                {
+                    // Do something else 
+                    return false;
+                }
+        }
+    }
+
+    private bool IsSqlAlive()
+    {
+        // Do something to test SQL Server
+        return true;
     }
 }");
         }
@@ -1118,9 +1271,6 @@ class TestClass
         End Try
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -1177,7 +1327,8 @@ class TestClass
         [Fact]
         public void Yield()
         {
-            TestConversionVisualBasicToCSharp(@"Class TestClass
+            // Comment from "Next" gets pushed up to previous line
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
     Private Iterator Function TestMethod(ByVal number As Integer) As IEnumerable(Of Integer)
         If number < 0 Then Return
 
@@ -1185,10 +1336,7 @@ class TestClass
             Yield i
         Next
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"using System.Collections.Generic;
 
 class TestClass
 {

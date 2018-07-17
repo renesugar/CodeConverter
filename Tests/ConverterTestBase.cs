@@ -1,80 +1,76 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using ICSharpCode.CodeConverter;
 using ICSharpCode.CodeConverter.CSharp;
 using ICSharpCode.CodeConverter.Shared;
-using ICSharpCode.CodeConverter.Util;
 using ICSharpCode.CodeConverter.VB;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Formatting;
-using Microsoft.CodeAnalysis.Formatting;
-using Microsoft.CodeAnalysis.Text;
-using Microsoft.CodeAnalysis.VisualBasic;
 using Xunit;
 
 namespace CodeConverter.Tests
 {
     public class ConverterTestBase
     {
-        private bool testCSToVBCommentsByDefault = false;
-
-        public void TestConversionCSharpToVisualBasic(string csharpCode, string expectedVisualBasicCode, bool standaloneStatements = false, CSharpParseOptions csharpOptions = null, VisualBasicParseOptions vbOptions = null)
+        private bool _testCstoVBCommentsByDefault = false;
+        public void TestConversionCSharpToVisualBasic(string csharpCode, string expectedVisualBasicCode, bool expectSurroundingMethodBlock = false)
         {
+            expectedVisualBasicCode = AddSurroundingMethodBlock(expectedVisualBasicCode, expectSurroundingMethodBlock);
+
             TestConversionCSharpToVisualBasicWithoutComments(csharpCode, expectedVisualBasicCode);
-            if (testCSToVBCommentsByDefault) TestConversionCSharpToVisualBasicWithoutComments(AddLineNumberComments(csharpCode, "// ", false), AddLineNumberComments(expectedVisualBasicCode, "' ", true));
+            if (_testCstoVBCommentsByDefault) TestConversionCSharpToVisualBasicWithoutComments(AddLineNumberComments(csharpCode, "// ", false), AddLineNumberComments(expectedVisualBasicCode, "' ", true));
+        }
+
+        private static string AddSurroundingMethodBlock(string expectedVisualBasicCode, bool expectSurroundingBlock)
+        {
+            if (expectSurroundingBlock) {
+                var indentedStatements = expectedVisualBasicCode.Replace("\n", "\n    ");
+                expectedVisualBasicCode =
+$@"Private Sub SurroundingSub()
+    {indentedStatements}
+End Sub";
+            }
+
+            return expectedVisualBasicCode;
         }
 
         private static void TestConversionCSharpToVisualBasicWithoutComments(string csharpCode, string expectedVisualBasicCode)
         {
-            var outputNode = ProjectConversion<CSToVBConversion>.ConvertText(csharpCode, DiagnosticTestBase.DefaultMetadataReferences);
-
-            var txt = outputNode.ConvertedCode ?? outputNode.GetExceptionsAsString();
-            txt = Utils.HomogenizeEol(txt).TrimEnd();
-            expectedVisualBasicCode = Utils.HomogenizeEol(expectedVisualBasicCode).TrimEnd();
-            AssertCodeEqual(csharpCode, expectedVisualBasicCode, txt);
+            AssertConvertedCodeResultEquals<CSToVBConversion>(csharpCode, expectedVisualBasicCode);
         }
 
-        public void TestConversionVisualBasicToCSharp(string visualBasicCode, string expectedCsharpCode, bool standaloneStatements = false)
+        public void TestConversionVisualBasicToCSharp(string visualBasicCode, string expectedCsharpCode, bool expectSurroundingBlock = false)
         {
-            expectedCsharpCode = AddCSUsings(expectedCsharpCode, standaloneStatements);
-            TestConversionVisualBasicToCSharpWithoutComments(visualBasicCode, expectedCsharpCode, false);
-            TestConversionVisualBasicToCSharpWithoutComments(AddLineNumberComments(visualBasicCode, "' ", false), AddLineNumberComments(expectedCsharpCode, "// ", true), false);
+            if (expectSurroundingBlock) expectedCsharpCode = SurroundWithBlock(expectedCsharpCode);
+            TestConversionVisualBasicToCSharpWithoutComments(visualBasicCode, expectedCsharpCode);
+            TestConversionVisualBasicToCSharpWithoutComments(AddLineNumberComments(visualBasicCode, "' ", false), AddLineNumberComments(expectedCsharpCode, "// ", true));
         }
 
-        private static string AddCSUsings(string expectedCsharpCode, bool standaloneStatements)
+        private static string SurroundWithBlock(string expectedCsharpCode)
         {
-            if (standaloneStatements)
-            {
-                var indentedStatements = expectedCsharpCode.Replace("\n", "\n    ");
-                expectedCsharpCode =
-                    $@"{{
-    {indentedStatements}
-}}";
-            }
-            else if (!expectedCsharpCode.StartsWith("using System"))
-            {
-                expectedCsharpCode =
-                    @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-" + expectedCsharpCode;
-            }
-
-            return expectedCsharpCode;
+            var indentedStatements = expectedCsharpCode.Replace("\n", "\n    ");
+            return $"{{\r\n    {indentedStatements}\r\n}}";
         }
 
-        public void TestConversionVisualBasicToCSharpWithoutComments(string visualBasicCode, string expectedCsharpCode, bool addUsings = true, CSharpParseOptions csharpOptions = null, VisualBasicParseOptions vbOptions = null)
+        public void TestConversionVisualBasicToCSharpWithoutComments(string visualBasicCode, string expectedCsharpCode)
         {
-            if (addUsings) expectedCsharpCode = AddCSUsings(expectedCsharpCode, false);
-            var outputNode = ProjectConversion<VBToCSConversion>.ConvertText(visualBasicCode, DiagnosticTestBase.DefaultMetadataReferences);
-            var txt = Utils.HomogenizeEol(outputNode.ConvertedCode ?? outputNode.GetExceptionsAsString()).TrimEnd();
-            expectedCsharpCode = Utils.HomogenizeEol(expectedCsharpCode).TrimEnd();
-            AssertCodeEqual(visualBasicCode, expectedCsharpCode, txt);
+            AssertConvertedCodeResultEquals<VBToCSConversion>(visualBasicCode, expectedCsharpCode);
+        }
+
+        private static void AssertConvertedCodeResultEquals<TLanguageConversion>(string inputCode, string expectedConvertedCode) where TLanguageConversion : ILanguageConversion, new()
+        {
+            var outputNode =
+                ProjectConversion.ConvertText<TLanguageConversion>(inputCode, CodeWithOptions.DefaultMetadataReferences);
+            AssertConvertedCodeResultEquals(outputNode, expectedConvertedCode, inputCode);
+        }
+
+        private static void AssertConvertedCodeResultEquals(ConversionResult conversionResult,
+            string expectedConversionResultText, string originalSource)
+        {
+            var convertedTextFollowedByExceptions =
+                (conversionResult.ConvertedCode ?? "") + (conversionResult.GetExceptionsAsString() ?? "");
+            var txt = Utils.HomogenizeEol(convertedTextFollowedByExceptions).TrimEnd();
+            expectedConversionResultText = Utils.HomogenizeEol(expectedConversionResultText).TrimEnd();
+            AssertCodeEqual(originalSource, expectedConversionResultText, txt);
         }
 
         private static void AssertCodeEqual(string originalSource, string expectedConversion, string actualConversion)
@@ -137,7 +133,8 @@ using Microsoft.VisualBasic;
             return line.Trim() == "{"
                    || nextLine.Contains("where T")
                    || IsTwoLineCsIfStatement(line, nextLine)
-                   || line.TrimStart().StartsWith("//");
+                   || line.TrimStart().StartsWith("//")
+                   || line.Contains("DllImport");
         }
 
         /// <summary>
@@ -151,7 +148,7 @@ using Microsoft.VisualBasic;
         private static bool HasNoTargetLine(string prevLine, string line, string nextLine)
         {
             return IsVbInheritsOrImplements(nextLine)
-                || line.Contains("End If") || line.Contains("Next")
+                || line.Contains("End If")
                 || IsFirstOfMultiLineVbIfStatement(line)
                 || line.Contains("<Extension") || line.Contains("CompilerServices.Extension")
                 || line.TrimStart().StartsWith("'")

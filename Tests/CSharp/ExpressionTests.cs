@@ -4,25 +4,122 @@ namespace CodeConverter.Tests.CSharp
 {
     public class ExpressionTests : ConverterTestBase
     {
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultilineString()
         {
-            TestConversionVisualBasicToCSharp(@"Class TestClass
+            // Don't auto-test comments, otherwise it tries to put a comment in the middle of the string, which obviously isn't a valid place for it
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
     Private Sub TestMethod()
-        Dim x = ""Hello,
+        Dim x = ""Hello\ All strings in VB are verbatim """" < that's just a single escaped quote
+World!""
+        Dim y = $""Hello\ All strings in VB are verbatim """" < that's just a single escaped quote
 World!""
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
-        var x = @""Hello,
+        var x = @""Hello\ All strings in VB are verbatim """" < that's just a single escaped quote
 World!"";
+        var y = $@""Hello\ All strings in VB are verbatim """" < that's just a single escaped quote
+World!"";
+    }
+}");
+        }
+        [Fact]
+        public void Quotes()
+        {
+            // Don't auto-test comments, otherwise it tries to put a comment in the middle of the string, which obviously isn't a valid place for it
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Shared Function GetTextFeedInput(pStream As String, pTitle As String, pText As String) As String
+        Return ""{"" & AccessKey() & "",""""streamName"""": """""" & pStream & """""",""""point"""": ["" & GetTitleTextPair(pTitle, pText) & ""]}""
+    End Function
+
+    Shared Function AccessKey() As String
+        Return """"""accessKey"""": """"8iaiHNZpNbBkYHHGbMNiHhAp4uPPyQke""""""
+    End Function
+
+    Shared Function GetNameValuePair(pName As String, pValue As Integer) As String
+        Return (""{""""name"""": """""" & pName & """""", """"value"""": """""" & pValue & """"""}"")
+    End Function
+
+    Shared Function GetNameValuePair(pName As String, pValue As String) As String
+        Return (""{""""name"""": """""" & pName & """""", """"value"""": """""" & pValue & """"""}"")
+    End Function
+
+    Shared Function GetTitleTextPair(pName As String, pValue As String) As String
+        Return (""{""""title"""": """""" & pName & """""", """"msg"""": """""" & pValue & """"""}"")
+    End Function
+    Shared Function GetDeltaPoint(pDelta As Integer) As String
+        Return (""{""""delta"""": """""" & pDelta & """"""}"")
+    End Function
+End Class", @"class TestClass
+{
+    public static string GetTextFeedInput(string pStream, string pTitle, string pText)
+    {
+        return ""{"" + AccessKey() + "",\""streamName\"": \"""" + pStream + ""\"",\""point\"": ["" + GetTitleTextPair(pTitle, pText) + ""]}"";
+    }
+
+    public static string AccessKey()
+    {
+        return ""\""accessKey\"": \""8iaiHNZpNbBkYHHGbMNiHhAp4uPPyQke\"""";
+    }
+
+    public static string GetNameValuePair(string pName, int pValue)
+    {
+        return (""{\""name\"": \"""" + pName + ""\"", \""value\"": \"""" + pValue + ""\""}"");
+    }
+
+    public static string GetNameValuePair(string pName, string pValue)
+    {
+        return (""{\""name\"": \"""" + pName + ""\"", \""value\"": \"""" + pValue + ""\""}"");
+    }
+
+    public static string GetTitleTextPair(string pName, string pValue)
+    {
+        return (""{\""title\"": \"""" + pName + ""\"", \""msg\"": \"""" + pValue + ""\""}"");
+    }
+    public static string GetDeltaPoint(int pDelta)
+    {
+        return (""{\""delta\"": \"""" + pDelta + ""\""}"");
+    }
+}");
+        }
+
+        [Fact]
+        public void ConversionOfNotUsesParensIfNeeded()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass
+    Private Sub TestMethod()
+        Dim rslt = Not 1 = 2
+        Dim rslt2 = Not True
+        Dim rslt3 = TypeOf True IsNot Boolean
+    End Sub
+End Class", @"class TestClass
+{
+    private void TestMethod()
+    {
+        var rslt = !(1 == 2);
+        var rslt2 = !true;
+        var rslt3 = !(true is bool);
+    }
+}");
+        }
+
+        [Fact]
+        public void ConversionOfCTypeUsesParensIfNeeded()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass
+    Private Sub TestMethod()
+        Dim rslt = Ctype(true, Object).ToString()
+        Dim rslt2 = Ctype(true, Object)
+    End Sub
+End Class", @"class TestClass
+{
+    private void TestMethod()
+    {
+        var rslt = ((object)true).ToString();
+        var rslt2 = (object)true;
     }
 }");
         }
@@ -33,13 +130,28 @@ World!"";
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private DefaultDate as Date = Nothing
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
-    private System.DateTime DefaultDate = default(Date);
+    private DateTime DefaultDate = default(DateTime);
+}");
+        }
+
+        [Fact]
+        public void UnknownTypeInvocation()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass
+    Private property DefaultDate as System.SomeUnknownType
+    private sub TestMethod()
+        Dim a = DefaultDate(1, 2, 3).Blawer(1, 2, 3)
+    End Sub
+End Class", @"class TestClass
+{
+    private System.SomeUnknownType DefaultDate { get; set; }
+    private void TestMethod()
+    {
+        var a = DefaultDate[1, 2, 3].Blawer(1, 2, 3);
+    }
 }");
         }
 
@@ -85,21 +197,25 @@ End Class", @"class TestClass
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub TestMethod()
-        Dim x = 6 Mod 5 \ 4 + 3 * 2
+        Dim x = 7 ^ 6 Mod 5 \ 4 + 3 * 2
         x += 1
         x -= 2
         x *= 3
         x \= 4
+        x ^= 5
     End Sub
-End Class", @"class TestClass
+End Class", @"using System;
+
+class TestClass
 {
     private void TestMethod()
     {
-        var x = 6 % 5 / 4 + 3 * 2;
+        var x = Math.Pow(7, 6) % 5 / 4 + 3 * 2;
         x += 1;
         x -= 2;
         x *= 3;
         x /= 4;
+        x = Math.Pow(x, 5);
     }
 }");
         }
@@ -113,6 +229,8 @@ End Class", @"class TestClass
         x /= 2
         Dim y = 10.0 / 3
         y /= 2
+        Dim z As Integer = 8
+        z /= 3
     End Sub
 End Class", @"class TestClass
 {
@@ -122,6 +240,8 @@ End Class", @"class TestClass
         x /= 2;
         var y = 10.0 / 3;
         y /= 2;
+        int z = 8;
+        z /= (double)3;
     }
 }");
         }
@@ -133,12 +253,7 @@ End Class", @"class TestClass
     Private Sub TestMethod()
         Dim strings = { ""1"", ""2"" }
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -155,9 +270,6 @@ class TestClass
         Dim str = (New ThreadStaticAttribute).ToString
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -176,12 +288,7 @@ class TestClass
         Dim str = ""Hello, ""
         str &= ""World""
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -198,12 +305,7 @@ class TestClass
     Private Sub TestMethod()
         Dim typ = GetType(String)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod()
     {
@@ -220,12 +322,7 @@ class TestClass
         Dim s = ""1,2""
         Return s.Split(s(1))
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private string[] TestMethod()
     {
@@ -242,12 +339,7 @@ class TestClass
     Private Sub TestMethod(ByVal str As String)
         Dim result As Boolean = If((str = """"), True, False)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void TestMethod(string str)
     {
@@ -264,15 +356,42 @@ class TestClass
         Console.WriteLine(If(str, ""<null>""))
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
     private void TestMethod(string str)
     {
         Console.WriteLine(str ?? ""<null>"");
+    }
+}");
+        }
+        [Fact]
+        public void OmmittedArgumentInInvocation()
+        {
+            TestConversionVisualBasicToCSharp(@"Imports System
+
+Public Module MyExtensions
+    public sub NewColumn(type As Type , Optional strV1 As String = nothing, optional code As String = ""code"")
+    End sub
+
+    public Sub CallNewColumn()
+        NewColumn(GetType(MyExtensions))
+        NewColumn(Nothing, , ""otherCode"")
+        NewColumn(Nothing, ""fred"")
+    End Sub
+End Module", @"using System;
+
+public static class MyExtensions
+{
+    public static void NewColumn(Type type, string strV1 = null, string code = ""code"")
+    {
+    }
+
+    public static void CallNewColumn()
+    {
+        NewColumn(typeof(MyExtensions));
+        NewColumn(null, code: ""otherCode"");
+        NewColumn(null, ""fred"");
     }
 }");
         }
@@ -288,9 +407,6 @@ class TestClass
         Console.ReadKey()
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -313,10 +429,7 @@ class TestClass
         Dim s As String
         d.TryGetValue(""a"", s)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"using System.Collections.Generic;
 
 class TestClass
 {
@@ -330,28 +443,63 @@ class TestClass
         }
 
         [Fact]
-        public void ElvisOperatorExpression()
+        public void OmittedParamsArray()
         {
-            TestConversionVisualBasicToCSharp(@"Class TestClass
+            TestConversionVisualBasicToCSharp(@"Module AppBuilderUseExtensions
+    <System.Runtime.CompilerServices.Extension>
+    Function Use(Of T)(ByVal app As String, ParamArray args As Object()) As Object
+        Return Nothing
+    End Function
+End Module
+
+Class TestClass
     Private Sub TestMethod(ByVal str As String)
-        Dim length As Integer = If(str?.Length, -1)
-        Console.WriteLine(length)
-        Console.ReadKey()
-        Dim redirectUri As String = context.OwinContext.Authentication?.AuthenticationResponseChallenge?.Properties?.RedirectUri
+        str.Use(Of object)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"static class AppBuilderUseExtensions
+{
+    public static object Use<T>(this string app, params object[] args)
+    {
+        return null;
+    }
+}
 
 class TestClass
 {
     private void TestMethod(string str)
     {
+        str.Use<object>();
+    }
+}");
+        }
+
+        [Fact]
+        public void ElvisOperatorExpression()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass3
+    Private Class Rec
+        Public ReadOnly Property Prop As New Rec
+    End Class
+    Private Function TestMethod(ByVal str As String) As Rec
+        Dim length As Integer = If(str?.Length, -1)
+        Console.WriteLine(length)
+        Console.ReadKey()
+        Return New Rec()?.Prop?.Prop?.Prop
+    End Function
+End Class", @"using System;
+
+class TestClass3
+{
+    private class Rec
+    {
+        public Rec Prop { get; } = new Rec();
+    }
+    private Rec TestMethod(string str)
+    {
         int length = str?.Length ?? -1;
         Console.WriteLine(length);
         Console.ReadKey();
-        string redirectUri = context.OwinContext.Authentication?.AuthenticationResponseChallenge?.Properties?.RedirectUri;
+        return new Rec()?.Prop?.Prop?.Prop;
     }
 }");
         }
@@ -396,6 +544,32 @@ End Class", @"class TestClass
     }
 }");
         }
+        [Fact]
+        public void CollectionInitializers()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Private Sub DoStuff(a As Object)
+    End Sub
+    Private Sub TestMethod()
+        DoStuff({1, 2})
+        Dim intList As New List(Of Integer) From {1}
+        Dim dict As New Dictionary(Of Integer, Integer) From {{1, 2}, {3, 4}}
+    End Sub
+End Class", @"using System.Collections.Generic;
+
+class TestClass
+{
+    private void DoStuff(object a)
+    {
+    }
+    private void TestMethod()
+    {
+        DoStuff(new[] { 1, 2 });
+        List<int> intList = new List<int>() { 1 };
+        Dictionary<int, int> dict = new Dictionary<int, int>() { { 1, 2 }, { 3, 4 } };
+    }
+}");
+        }
 
         [Fact]
         public void ThisMemberAccessExpression()
@@ -406,12 +580,7 @@ End Class", @"class TestClass
     Private Sub TestMethod()
         Me.member = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private int member;
 
@@ -435,12 +604,7 @@ Class TestClass
     Private Sub TestMethod()
         MyBase.member = 0
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class BaseTestClass
+End Class", @"class BaseTestClass
 {
     public int member;
 }
@@ -459,19 +623,16 @@ class TestClass : BaseTestClass
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub TestMethod()
-        Dim test = Function(ByVal a As Integer) a * 2
+        Dim test As Func(Of Integer, Integer) = Function(ByVal a As Integer) a * 2
         test(3)
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
     private void TestMethod()
     {
-        var test = int a => a * 2;
+        Func<int, int> test = (int a) => a * 2;
         test(3);
     }
 }");
@@ -482,38 +643,63 @@ class TestClass
         {
             TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
     Private Sub TestMethod()
-        Dim test = Function(a) a * 2
-        Dim test2 = Function(a, b)
-                        If b > 0 Then Return a / b
-                        Return 0
-                    End Function
+        Dim test As Func(Of Integer, Integer) = Function(a) a * 2
+        Dim test2 As Func(Of Integer, Integer, Double) = Function(a, b)
+            If b > 0 Then Return a / b
+            Return 0
+        End Function
 
-        Dim test3 = Function(a, b) a Mod b
+        Dim test3 As Func(Of Integer, Integer, Integer) = Function(a, b) a Mod b
         test(3)
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
     private void TestMethod()
     {
-        var test = a => a * 2;
-        var test2 = (a, b) =>
+        Func<int, int> test = a => a * 2;
+        Func<int, int, double> test2 = (a, b) =>
         {
             if (b > 0)
                 return a / (double)b;
             return 0;
         };
 
-        var test3 = (a, b) => a % b;
+        Func<int, int, int> test3 = (a, b) => a % b;
         test(3);
     }
 }");
         }
 
+        [Fact]
+        public void SingleLineLambdaWithStatementBody()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Private Sub TestMethod()
+        Dim x = 1
+        Dim simpleAssignmentAction As System.Action = Sub() x = 1
+        Dim nonBlockAction As System.Action = Sub() Console.WriteLine(""Statement"")
+        Dim ifAction As Action = Sub() If True Then Exit Sub
+    End Sub
+End Class", @"using System;
+
+class TestClass
+{
+    private void TestMethod()
+    {
+        var x = 1;
+        System.Action simpleAssignmentAction = () => x = 1;
+        System.Action nonBlockAction = () => Console.WriteLine(""Statement"");
+        Action ifAction = () =>"/* I don't know why this Action doesn't get qualified when the above two do - just characterizing current behaviour*/ + @"
+        {
+            if (true)
+                return;
+        };
+    }
+}");
+        }
+        
         [Fact]
         public void Await()
         {
@@ -527,9 +713,7 @@ class TestClass
         Console.WriteLine(result)
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+using System.Threading.Tasks;
 
 class TestClass
 {
@@ -565,7 +749,7 @@ End Sub",
               select n;
 
     foreach (var n in res)
-        System.Console.WriteLine(n);
+        Console.WriteLine(n);
 }");
         }
 
@@ -593,10 +777,10 @@ End Sub",
 
     foreach (var g in numberGroups)
     {
-        System.Console.WriteLine($""Numbers with a remainder of {g.Remainder} when divided by 5:"");
+        Console.WriteLine($""Numbers with a remainder of {g.Remainder} when divided by 5:"");
 
         foreach (var n in g.Numbers)
-            System.Console.WriteLine(n);
+            Console.WriteLine(n);
     }
 }");
         }
@@ -620,7 +804,10 @@ Class Test
         Next
     End Sub
 End Class",
-                @"class Product
+                @"using System;
+using System.Linq;
+
+class Product
 {
     public string Category;
     public string ProductName;
@@ -667,10 +854,10 @@ End Sub", @"public void Linq103()
 
     foreach (var v in q)
     {
-        System.Console.WriteLine(v.Category + "":"");
+        Console.WriteLine(v.Category + "":"");
 
         foreach (var p in v.Products)
-            System.Console.WriteLine(""   "" + p.ProductName);
+            Console.WriteLine(""   "" + p.ProductName);
     }
 }");
         }
@@ -694,22 +881,62 @@ End Function", @"private static string FindPicFilePath(string picId)
         }
 
         [Fact]
+        public void LinqMultipleFroms()
+        {
+            TestConversionVisualBasicToCSharp(@"Private Shared Sub LinqSub()
+    Dim _result = From _claimProgramSummary In New List(Of List(Of List(Of List(Of String))))()
+                  From _claimComponentSummary In _claimProgramSummary.First()
+                  From _lineItemCalculation In _claimComponentSummary.Last()
+                  Select _lineItemCalculation
+End Sub", @"private static void LinqSub()
+{
+    var _result = from _claimProgramSummary in new List<List<List<List<string>>>>()
+                  from _claimComponentSummary in _claimProgramSummary.First()
+                  from _lineItemCalculation in _claimComponentSummary.Last()
+                  select _lineItemCalculation;
+}");
+        }
+
+        [Fact]
         public void PartiallyQualifiedName()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Public Function TestMethod(dir As String) As String
          Return IO.Path.Combine(dir, ""file.txt"")
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     public string TestMethod(string dir)
     {
         return System.IO.Path.Combine(dir, ""file.txt"");
+    }
+}");
+        }
+        
+        [Fact]
+        public void NameQualifyingHandlesInheritance()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClassBase
+    Sub DoStuff()
+    End Sub
+End Class
+Class TestClass
+    Inherits TestClassBase
+    Private Sub TestMethod()
+        DoStuff()
+    End Sub
+End Class", @"class TestClassBase
+{
+    public void DoStuff()
+    {
+    }
+}
+
+class TestClass : TestClassBase
+{
+    private void TestMethod()
+    {
+        DoStuff();
     }
 }");
         }
@@ -721,10 +948,7 @@ class TestClass
     Public Function TestMethod() As String
          Return vbCrLf
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -732,6 +956,76 @@ class TestClass
     {
         return Constants.vbCrLf;
     }
+}");
+        }
+
+        [Fact]
+        public void ValueCapitalisation()
+        {
+            //TODO: Fix comment to be ported to top of property rather than bottom
+            TestConversionVisualBasicToCSharpWithoutComments(@"public Enum TestState
+one
+two
+end enum
+public class test
+private _state as TestState
+    Public Property State As TestState
+        Get
+            Return _state
+        End Get
+        Set
+            If Not _state.Equals(Value) Then
+                _state = Value
+            End If
+        End Set
+    End Property
+end class", @"public enum TestState
+{
+    one,
+    two
+}
+
+public class test
+{
+    private TestState _state;
+    public TestState State
+    {
+        get
+        {
+            return _state;
+        }
+        set
+        {
+            if (!_state.Equals(value))
+                _state = value;
+        }
+    }
+}");
+        }
+
+        [Fact]
+        public void StringInterpolationWithConditionalOperator()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(
+                @"Public Function GetString(yourBoolean as Boolean) As String
+    Return $""You {if (yourBoolean, ""do"", ""do not"")} have a true value""
+End Function",
+                @"public string GetString(bool yourBoolean)
+{
+    return $""You {(yourBoolean ? ""do"" : ""do not"")} have a true value"";
+}");
+        }
+
+        [Fact]
+        public void LogicalOrWithConditionalOperator()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(
+                @"Public Function GetString(yourBoolean as Boolean) As Boolean
+    Return 1 <> 1 OrElse if (yourBoolean, True, False)
+End Function",
+                @"public bool GetString(bool yourBoolean)
+{
+    return 1 != 1 || yourBoolean ? true : false;
 }");
         }
     }

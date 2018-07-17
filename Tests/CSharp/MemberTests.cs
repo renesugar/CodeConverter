@@ -12,16 +12,23 @@ namespace CodeConverter.Tests.CSharp
     Const answer As Integer = 42
     Private value As Integer = 10
     ReadOnly v As Integer = 15
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     const int answer = 42;
     private int value = 10;
     private readonly int v = 15;
+}");
+        }
+
+        [Fact]
+        public void TestConstantFieldInModule()
+        {
+            TestConversionVisualBasicToCSharp(
+@"Module TestModule
+    Const answer As Integer = 42
+End Module", @"static class TestModule
+{
+    const int answer = 42;
 }");
         }
 
@@ -34,11 +41,10 @@ class TestClass
         argument = Nothing
         argument2 = Nothing
         argument3 = Nothing
+        Console.WriteLine(Enumerable.Empty(Of String))
     End Sub
 End Class", @"using System;
-using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -49,6 +55,7 @@ class TestClass
         argument = null;
         argument2 = default(T2);
         argument3 = default(T3);
+        Console.WriteLine(Enumerable.Empty<string>());
     }
 }");
         }
@@ -64,12 +71,7 @@ class TestClass
         argument2 = Nothing
         argument3 = Nothing
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     /// <summary>Xml doc</summary>
     public void TestMethod<T, T2, T3>(out T argument, ref T2 argument2, T3 argument3)
@@ -91,12 +93,7 @@ class TestClass
     Public Function TestMethod(Of T As {Class, New}, T2 As Structure, T3)(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3) As Integer
         Return 0
     End Function
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     public int TestMethod<T, T2, T3>(out T argument, ref T2 argument2, T3 argument3)
         where T : class, new()
@@ -117,12 +114,7 @@ class TestClass
         argument2 = Nothing
         argument3 = Nothing
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     public static void TestMethod<T, T2, T3>(out T argument, ref T2 argument2, T3 argument3)
         where T : class, new()
@@ -139,14 +131,9 @@ class TestClass
         public void TestAbstractMethod()
         {
             TestConversionVisualBasicToCSharp(
-@"Class TestClass
+@"MustInherit Class TestClass
     Public MustOverride Sub TestMethod()
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"abstract class TestClass
 {
     public abstract void TestMethod();
 }");
@@ -162,12 +149,7 @@ class TestClass
         argument2 = Nothing
         argument3 = Nothing
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     public sealed void TestMethod<T, T2, T3>(out T argument, ref T2 argument2, T3 argument3)
         where T : class, new()
@@ -228,9 +210,17 @@ class TestSubclass : TestClass
     <System.Runtime.CompilerServices.Extension()>
     Sub TestMethod(ByVal str As String)
     End Sub
+
+    <System.Runtime.CompilerServices.Extension()>
+    Sub TestMethod2Parameters(ByVal str As String, other As String)
+    End Sub
 End Module", @"static class TestClass
 {
     public static void TestMethod(this string str)
+    {
+    }
+
+    public static void TestMethod2Parameters(this string str, string other)
     {
     }
 }");
@@ -246,12 +236,7 @@ Module TestClass
     <Extension()>
     Sub TestMethod(ByVal str As String)
     End Sub
-End Module", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-using System.Runtime.CompilerServices;
-
+End Module", @"
 static class TestClass
 {
     public static void TestMethod(this string str)
@@ -283,12 +268,7 @@ static class TestClass
             Me.m_test3 = value
         End Set
     End Property
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     public int Test { get; set; }
 
@@ -323,12 +303,7 @@ class TestClass
 @"Class TestClass(Of T As {Class, New}, T2 As Structure, T3)
     Public Sub New(<Out> ByRef argument As T, ByRef argument2 As T2, ByVal argument3 As T3)
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass<T, T2, T3>
+End Class", @"class TestClass<T, T2, T3>
     where T : class, new()
     where T2 : struct
 {
@@ -345,12 +320,7 @@ class TestClass<T, T2, T3>
 @"Class TestClass
     Protected Overrides Sub Finalize()
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     ~TestClass()
     {
@@ -365,9 +335,6 @@ class TestClass
 @"Class TestClass
     Public Event MyEvent As EventHandler
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -375,41 +342,295 @@ class TestClass
 }");
         }
 
-        [Fact(Skip = "Not implemented!")]
-        public void TestCustomEvent()
+        [Fact]
+        public void TestModuleHandlesWithEvents()
         {
-            TestConversionVisualBasicToCSharp(
-@"Class TestClass
-    Private backingField As EventHandler
+            // Too much auto-generated code to auto-test comments
+            TestConversionVisualBasicToCSharpWithoutComments(
+@"Class MyEventClass
+    Public Event TestEvent()
 
-    Public Event MyEvent As EventHandler
-        AddHandler(ByVal value As EventHandler)
-            AddHandler Me.backingField, value
-        End AddHandler
-        RemoveHandler(ByVal value As EventHandler)
-            RemoveHandler Me.backingField, value
-        End RemoveHandler
-    End Event
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+    Sub RaiseEvents()
+        RaiseEvent TestEvent()
+    End Sub
+End Class
 
-class TestClass
+Module Module1
+    WithEvents EventClassInstance, EventClassInstance2 As New MyEventClass
+
+    Sub PrintTestMessage2() Handles EventClassInstance.TestEvent, EventClassInstance2.TestEvent
+    End Sub
+
+    Sub PrintTestMessage3() Handles EventClassInstance.TestEvent
+    End Sub
+End Module", @"using System.Runtime.CompilerServices;
+
+class MyEventClass
 {
-    EventHandler backingField;
+    public event TestEventEventHandler TestEvent;
 
-    public event EventHandler MyEvent {
-        add {
-            this.backingField += value;
+    public delegate void TestEventEventHandler();
+
+    public void RaiseEvents()
+    {
+        TestEvent?.Invoke();
+    }
+}
+
+static class Module1
+{
+    static Module1()
+    {
+        EventClassInstance = new MyEventClass();
+        EventClassInstance2 = new MyEventClass();
+    }
+
+    private static MyEventClass _EventClassInstance, _EventClassInstance2;
+
+    private static MyEventClass EventClassInstance
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get
+        {
+            return _EventClassInstance;
         }
-        remove {
-            this.backingField -= value;
+
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set
+        {
+            if (_EventClassInstance != null)
+            {
+                _EventClassInstance.TestEvent -= PrintTestMessage2;
+                _EventClassInstance.TestEvent -= PrintTestMessage3;
+            }
+
+            _EventClassInstance = value;
+            if (_EventClassInstance != null)
+            {
+                _EventClassInstance.TestEvent += PrintTestMessage2;
+                _EventClassInstance.TestEvent += PrintTestMessage3;
+            }
         }
+    }
+
+    private static MyEventClass EventClassInstance2
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get
+        {
+            return _EventClassInstance2;
+        }
+
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set
+        {
+            if (_EventClassInstance2 != null)
+            {
+                _EventClassInstance2.TestEvent -= PrintTestMessage2;
+            }
+
+            _EventClassInstance2 = value;
+            if (_EventClassInstance2 != null)
+            {
+                _EventClassInstance2.TestEvent += PrintTestMessage2;
+            }
+        }
+    }
+
+    public static void PrintTestMessage2()
+    {
+    }
+
+    public static void PrintTestMessage3()
+    {
     }
 }");
         }
 
+        [Fact]
+        public void TestWitheventsWithoutInitializer()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(
+@"Class MyEventClass
+    Public Event TestEvent()
+End Class
+Class Class1
+    WithEvents MyEventClassInstance As MyEventClass
+    Sub EventClassInstance_TestEvent() Handles MyEventClassInstance.TestEvent
+    End Sub
+End Class", @"using System.Runtime.CompilerServices;
+
+class MyEventClass
+{
+    public event TestEventEventHandler TestEvent;
+
+    public delegate void TestEventEventHandler();
+}
+
+class Class1
+{
+    private MyEventClass _MyEventClassInstance;
+
+    private MyEventClass MyEventClassInstance
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get
+        {
+            return _MyEventClassInstance;
+        }
+
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set
+        {
+            if (_MyEventClassInstance != null)
+            {
+                _MyEventClassInstance.TestEvent -= EventClassInstance_TestEvent;
+            }
+
+            _MyEventClassInstance = value;
+            if (_MyEventClassInstance != null)
+            {
+                _MyEventClassInstance.TestEvent += EventClassInstance_TestEvent;
+            }
+        }
+    }
+
+    public void EventClassInstance_TestEvent()
+    {
+    }
+}
+");
+        }
+
+        [Fact]
+        public void TestClassHandlesWithEvents()
+        {
+            // Too much auto-generated code to auto-test comments
+            TestConversionVisualBasicToCSharpWithoutComments(
+@"Class MyEventClass
+    Public Event TestEvent()
+
+    Sub RaiseEvents()
+        RaiseEvent TestEvent()
+    End Sub
+End Class
+
+Class Class1
+    Shared WithEvents SharedEventClassInstance As New MyEventClass
+    WithEvents NonSharedEventClassInstance As New MyEventClass
+
+    Public Sub New()
+    End Sub
+
+    Public Sub New(num As Integer)
+    End Sub
+
+    Public Sub New(obj As Object)
+        MyClass.New()
+    End Sub
+
+    Shared Sub PrintTestMessage2() Handles SharedEventClassInstance.TestEvent, NonSharedEventClassInstance.TestEvent
+    End Sub
+
+    Sub PrintTestMessage3() Handles NonSharedEventClassInstance.TestEvent
+    End Sub
+End Class", @"using System.Runtime.CompilerServices;
+
+class MyEventClass
+{
+    public event TestEventEventHandler TestEvent;
+
+    public delegate void TestEventEventHandler();
+
+    public void RaiseEvents()
+    {
+        TestEvent?.Invoke();
+    }
+}
+
+class Class1
+{
+    static Class1()
+    {
+        SharedEventClassInstance = new MyEventClass();
+    }
+
+    public Class1(int num)
+    {
+        NonSharedEventClassInstance = new MyEventClass();
+    }
+
+    public Class1()
+    {
+        NonSharedEventClassInstance = new MyEventClass();
+    }
+    private static MyEventClass _SharedEventClassInstance;
+
+    private static MyEventClass SharedEventClassInstance
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get
+        {
+            return _SharedEventClassInstance;
+        }
+
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set
+        {
+            if (_SharedEventClassInstance != null)
+            {
+                _SharedEventClassInstance.TestEvent -= PrintTestMessage2;
+            }
+
+            _SharedEventClassInstance = value;
+            if (_SharedEventClassInstance != null)
+            {
+                _SharedEventClassInstance.TestEvent += PrintTestMessage2;
+            }
+        }
+    }
+
+    private MyEventClass _NonSharedEventClassInstance;
+
+    private MyEventClass NonSharedEventClassInstance
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get
+        {
+            return _NonSharedEventClassInstance;
+        }
+
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set
+        {
+            if (_NonSharedEventClassInstance != null)
+            {
+                _NonSharedEventClassInstance.TestEvent -= PrintTestMessage2;
+                _NonSharedEventClassInstance.TestEvent -= PrintTestMessage3;
+            }
+
+            _NonSharedEventClassInstance = value;
+            if (_NonSharedEventClassInstance != null)
+            {
+                _NonSharedEventClassInstance.TestEvent += PrintTestMessage2;
+                _NonSharedEventClassInstance.TestEvent += PrintTestMessage3;
+            }
+        }
+    }
+
+    public Class1(object obj) : this()
+    {
+    }
+
+    public static void PrintTestMessage2()
+    {
+    }
+
+    public void PrintTestMessage3()
+    {
+    }
+}");
+        }
 
         [Fact]
         public void SynthesizedBackingFieldAccess()
@@ -418,12 +639,7 @@ class TestClass
     Private Shared Property First As Integer
 
     Private Second As Integer = _First
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private static int First { get; set; }
 
@@ -431,17 +647,13 @@ class TestClass
 }");
         }
 
-
         [Fact]
         public void PropertyInitializers()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private ReadOnly Property First As New List(Of String)
     Private Property Second As Integer = 0
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
+End Class", @"using System.Collections.Generic;
 
 class TestClass
 {
@@ -519,16 +731,194 @@ internal class TestClass2 : TestClass1
         }
 
         [Fact]
+        public void TestNarrowingWideningConversionOperator()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class MyInt
+    Public Shared Narrowing Operator CType(i As Integer) As MyInt
+        Return New MyInt()
+    End Operator
+    Public Shared Widening Operator CType(myInt As MyInt) As Integer
+        Return 1
+    End Operator
+End Class"
+                , @"public class MyInt
+{
+    public static explicit operator MyInt(int i)
+    {
+        return new MyInt();
+    }
+    public static implicit operator int(MyInt myInt)
+    {
+        return 1;
+    }
+}");
+        }
+
+        [Fact]
+        public void OperatorOverloads()
+        {
+            // Note a couple map to the same thing in C# so occasionally the result won't compile. The user can manually decide what to do in such scenarios.
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class AcmeClass
+    Public Shared Operator +(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator &(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator -(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator Not(ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator *(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator /(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator \(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator Mod(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator <<(ac As AcmeClass, i As Integer) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator >>(ac As AcmeClass, i As Integer) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator =(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator <>(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator <(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator >(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator <=(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator >=(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator And(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator Or(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+End Class", @"public class AcmeClass
+{
+    public static AcmeClass operator +(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator +(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator -(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator !(AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator *(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator /(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator /(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator %(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator <<(AcmeClass ac, int i)
+    {
+        return ac;
+    }
+    public static AcmeClass operator >>(AcmeClass ac, int i)
+    {
+        return ac;
+    }
+    public static AcmeClass operator ==(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator !=(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator <(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator >(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator <=(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator >=(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator &(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator |(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+}");
+        }
+
+        [Fact(Skip = "No obvious C# equivalent")]
+        public void OperatorOverloadsWithNoCSharpEquivalent()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class AcmeClass
+    Public Shared Operator ^(i As Integer, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+    Public Shared Operator Like(s As String, ac As AcmeClass) As AcmeClass
+        Return ac
+    End Operator
+End Class", @"public class AcmeClass" + /* not valid C# - to implement this you'd need to create a new method, and convert all callers to use it*/ @"
+{
+    public static AcmeClass operator ^(int i, AcmeClass ac)
+    {
+        return ac;
+    }
+    public static AcmeClass operator Like(string s, AcmeClass ac)
+    {
+        return ac;
+    }
+}");
+        }
+
+        [Fact]
         public void ClassWithGloballyQualifiedAttribute()
         {
             TestConversionVisualBasicToCSharp(@"<Global.System.Diagnostics.DebuggerDisplay(""Hello World"")>
 Class TestClass
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-[global::System.Diagnostics.DebuggerDisplay(""Hello World"")]
+End Class", @"[global::System.Diagnostics.DebuggerDisplay(""Hello World"")]
 class TestClass
 {
 }");
@@ -541,9 +931,6 @@ class TestClass
     <ThreadStatic>
     Private Shared First As Integer
 End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
 
 class TestClass
 {
@@ -558,12 +945,7 @@ class TestClass
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub SomeBools(ParamArray anyName As Boolean())
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void SomeBools(params bool[] anyName)
     {
@@ -577,12 +959,7 @@ class TestClass
             TestConversionVisualBasicToCSharp(@"Class TestClass
     Private Sub SomeBools(ParamArray bool As Boolean())
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
     private void SomeBools(params bool[] @bool)
     {
@@ -625,6 +1002,37 @@ End Class",
         }
 
         [Fact]
+        public void PartialClass()
+        {
+            // Can't auto test comments when there are already manual comments used
+            TestConversionVisualBasicToCSharpWithoutComments(
+@"Partial Class TestClass
+    Private Sub DoNothing()
+        Console.WriteLine(""Hello"")
+    End Sub
+End Class
+
+Class TestClass ' VB doesn't require partial here (when just a single class omits it)
+    Partial Private Sub DoNothing()
+    End Sub
+End Class",
+@"using System;
+
+partial class TestClass
+{
+    partial void DoNothing()
+    {
+        Console.WriteLine(""Hello"");
+    }
+}
+
+partial class TestClass // VB doesn't require partial here (when just a single class omits it)
+{
+    partial void DoNothing();
+}");
+        }
+
+        [Fact]
         public void NestedClass()
         {
             TestConversionVisualBasicToCSharp(@"Class ClA
@@ -647,12 +1055,7 @@ Class MyClassC
         ClA.MA()
         ClA.ClassB.MB()
     End Sub
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class ClA
+End Class", @"class ClA
 {
     public static void MA()
     {
@@ -681,14 +1084,23 @@ class MyClassC
 }");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void TestIndexer()
-        {
-            TestConversionVisualBasicToCSharp(
+        {   // BUG: Comments aren't properly transferred to the property statement because the line ends in a square bracket
+            TestConversionVisualBasicToCSharpWithoutComments(
 @"Class TestClass
-    Default Public Property Item(ByVal index As Integer) As Integer
+    Private _Items As Integer()
 
-    Default Public Property Item(ByVal index As String) As Integer
+    Default Public Property Item(ByVal index As Integer) As Integer
+        Get
+            Return _Items(index)
+        End Get
+        Set(ByVal value As Integer)
+            _Items(index) = value
+        End Set
+    End Property
+
+    Default Public ReadOnly Property Item(ByVal index As String) As Integer
         Get
             Return 0
         End Get
@@ -704,21 +1116,42 @@ class MyClassC
             Me.m_test3 = value
         End Set
     End Property
-End Class", @"using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.VisualBasic;
-
-class TestClass
+End Class", @"class TestClass
 {
-    public int this[int index] { get; set; }
-    public int this[string index] {
-        get { return 0; }
+    private int[] _Items;
+
+    public int this[int index]
+    {
+        get
+        {
+            return _Items[index];
+        }
+        set
+        {
+            _Items[index] = value;
+        }
     }
-    int m_test3;
-    public int this[double index] {
-        get { return this.m_test3; }
-        set { this.m_test3 = value; }
+
+    public int this[string index]
+    {
+        get
+        {
+            return 0;
+        }
+    }
+
+    private int m_test3;
+
+    public int this[double index]
+    {
+        get
+        {
+            return this.m_test3;
+        }
+        set
+        {
+            this.m_test3 = value;
+        }
     }
 }");
         }
