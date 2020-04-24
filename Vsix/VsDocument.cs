@@ -1,9 +1,9 @@
 ﻿using System;
 using Microsoft.VisualStudio.Shell.Interop;
 
-namespace CodeConverter.VsExtension
+namespace ICSharpCode.CodeConverter.VsExtension
 {
-    class VsDocument
+    internal class VsDocument
     {
         private readonly IVsProject _hierarchy;
         private readonly uint _itemId;
@@ -18,8 +18,8 @@ namespace CodeConverter.VsExtension
 
         public string ItemPath {
             get {
-                string itemPath = null;
-                _hierarchy.GetMkDocument(_itemId, out itemPath);
+                Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+                _hierarchy.GetMkDocument(_itemId, out string itemPath);
                 return itemPath;
             }
         }

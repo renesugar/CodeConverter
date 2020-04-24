@@ -1,14 +1,15 @@
-﻿using System;
+﻿using System.Threading.Tasks;
+using ICSharpCode.CodeConverter.Tests.TestRunners;
 using Xunit;
 
-namespace CodeConverter.Tests.VB
+namespace ICSharpCode.CodeConverter.Tests.VB
 {
     public class SpecialConversionTests : ConverterTestBase
     {
         [Fact]
-        public void TestSimpleInlineAssign()
+        public async Task TestSimpleInlineAssignAsync()
         {
-            TestConversionCSharpToVisualBasic(
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class TestClass
 {
     void TestMethod()
@@ -29,103 +30,139 @@ namespace CodeConverter.Tests.VB
             Return value
         End Function
     End Class
-End Class");
+End Class
+
+1 target compilation errors:
+BC30451: 'CSharpImpl.__Assign' is not declared. It may be inaccessible due to its protection level.");
         }
 
         [Fact]
-        public void TestSimplePostIncrementAssign()
+        public async Task TestSimplePostIncrementAssignAsync()
         {
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
+            await TestConversionCSharpToVisualBasicAsync(
+@"class TestClass{
     void TestMethod()
     {
         int a = 5, b;
         b = a++;
     }
-}", @"Friend Class TestClass
+}",
+@"Friend Class TestClass
     Private Sub TestMethod()
         Dim b As Integer, a As Integer = 5
-        b = Math.Min(System.Threading.Interlocked.Increment(a), a - 1)
+        b = System.Math.Min(System.Threading.Interlocked.Increment(a), a - 1)
     End Sub
-End Class");
+End Class", conversionOptions: EmptyNamespaceOptionStrictOff);
         }
 
         [Fact]
-        public void RaiseEvent()
+        public async Task RaiseEventOneLinersAsync()
         {
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+class TestClass
 {
     event EventHandler MyEvent;
 
     void TestMethod()
     {
+        MyEvent(this, EventArgs.Empty);
         if (MyEvent != null) MyEvent(this, EventArgs.Empty);
+        MyEvent.Invoke(this, EventArgs.Empty);
+        MyEvent?.Invoke(this, EventArgs.Empty);
     }
-}", @"Friend Class TestClass
+}", @"Imports System
+
+Friend Class TestClass
+    Private Event MyEvent As EventHandler
+
+    Private Sub TestMethod()
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+    End Sub
+End Class");
+        }
+
+        [Fact]
+        public async Task RaiseEventInElseAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+public class Foo
+{
+    public event EventHandler<EventArgs> Bar;
+
+    protected void OnBar(EventArgs e)
+    {
+        if (Bar == null)
+            System.Diagnostics.Debug.WriteLine(""No subscriber"");
+        else
+            Bar.Invoke(this, e);
+    }
+}", @"Imports System
+
+Public Class Foo
+    Public Event Bar As EventHandler(Of EventArgs)
+
+    Protected Sub OnBar(ByVal e As EventArgs)
+        If BarEvent Is Nothing Then
+            Debug.WriteLine(""No subscriber"")
+        Else
+            RaiseEvent Bar(Me, e)
+        End If
+    End Sub
+End Class
+");
+        }
+
+        [Fact]
+        public async Task RaiseEventReversedConditionalAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+class TestClass
+{
+    event EventHandler MyEvent;
+
+    void TestMethod()
+    {
+        if (null != MyEvent) { MyEvent(this, EventArgs.Empty); }
+    }
+}", @"Imports System
+
+Friend Class TestClass
     Private Event MyEvent As EventHandler
 
     Private Sub TestMethod()
         RaiseEvent MyEvent(Me, EventArgs.Empty)
     End Sub
 End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
+        }
+
+        [Fact]
+        public async Task RaiseEventQualifiedAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+class TestClass
 {
+    event EventHandler MyEvent;
+
     void TestMethod()
     {
-        if ((MyEvent != null)) MyEvent(this, EventArgs.Empty);
+        if (this.MyEvent != null) this.MyEvent(this, EventArgs.Empty);
     }
-}", @"Friend Class TestClass
-    Private Sub TestMethod()
-        RaiseEvent MyEvent(Me, EventArgs.Empty)
-    End Sub
-End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
-    void TestMethod()
-    {
-        if (null != MyEvent) { MyEvent(this, EventArgs.Empty); }
-    }
-}", @"Friend Class TestClass
-    Private Sub TestMethod()
-        RaiseEvent MyEvent(Me, EventArgs.Empty)
-    End Sub
-End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
-    void TestMethod()
-    {
-        if (this.MyEvent != null) MyEvent(this, EventArgs.Empty);
-    }
-}", @"Friend Class TestClass
-    Private Sub TestMethod()
-        RaiseEvent MyEvent(Me, EventArgs.Empty)
-    End Sub
-End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
-    void TestMethod()
-    {
-        if (MyEvent != null) this.MyEvent(this, EventArgs.Empty);
-    }
-}", @"Friend Class TestClass
-    Private Sub TestMethod()
-        RaiseEvent MyEvent(Me, EventArgs.Empty)
-    End Sub
-End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
-    void TestMethod()
-    {
-        if ((this.MyEvent != null)) { this.MyEvent(this, EventArgs.Empty); }
-    }
-}", @"Friend Class TestClass
+}", @"Imports System
+
+Friend Class TestClass
+    Private Event MyEvent As EventHandler
+
     Private Sub TestMethod()
         RaiseEvent MyEvent(Me, EventArgs.Empty)
     End Sub
@@ -133,9 +170,62 @@ End Class");
         }
 
         [Fact]
-        public void IfStatementSimilarToRaiseEvent()
+        public async Task RaiseEventInNestedBracketsAsync()
         {
-            TestConversionCSharpToVisualBasic(
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+class TestClass
+{
+    event EventHandler MyEvent;
+
+    void TestMethod()
+    {
+        if ((MyEvent != null)) this.MyEvent.Invoke(this, EventArgs.Empty);
+    }
+}", @"Imports System
+
+Friend Class TestClass
+    Private Event MyEvent As EventHandler
+
+    Private Sub TestMethod()
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+    End Sub
+End Class");
+        }
+
+        [Fact]
+        public async Task RaiseEventQualifiedWithNestedBracketsAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
+                @"using System;
+
+class TestClass
+{
+    event EventHandler MyEvent;
+
+    void TestMethod()
+    {
+        if ((this.MyEvent != null)) { this.MyEvent(this, EventArgs.Empty); }
+    }
+}", @"Imports System
+
+Friend Class TestClass
+    Private Event MyEvent As EventHandler
+
+    Private Sub TestMethod()
+        RaiseEvent MyEvent(Me, EventArgs.Empty)
+    End Sub
+End Class");
+        }
+
+        /// <summary>
+        /// Intentionally unknown type used to ensure imperfect compilation errs towards common case
+        /// </summary>
+        [Fact]
+        public async Task IfStatementSimilarToRaiseEventAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class TestClass
 {
     void TestMethod()
@@ -146,9 +236,24 @@ End Class");
     Private Sub TestMethod()
         If FullImage IsNot Nothing Then DrawImage()
     End Sub
-End Class");
+End Class
+
+2 source compilation errors:
+CS0103: The name 'FullImage' does not exist in the current context
+CS0103: The name 'DrawImage' does not exist in the current context
+2 target compilation errors:
+BC30451: 'FullImage' is not declared. It may be inaccessible due to its protection level.
+BC30451: 'DrawImage' is not declared. It may be inaccessible due to its protection level.", expectCompilationErrors: true);
+        }
+
+        /// <summary>
+        /// Intentionally unknown type used to ensure imperfect compilation errs towards common case
+        /// </summary>
+        [Fact]
+        public async Task IfStatementSimilarToRaiseEventRegressionTestAsync()
+        {
             // regression test:
-            TestConversionCSharpToVisualBasic(
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class TestClass
 {
     void TestMethod()
@@ -159,9 +264,23 @@ End Class");
     Private Sub TestMethod()
         If FullImage IsNot Nothing Then e.DrawImage()
     End Sub
-End Class");
-            // with braces:
-            TestConversionCSharpToVisualBasic(
+End Class
+
+2 source compilation errors:
+CS0103: The name 'FullImage' does not exist in the current context
+CS0103: The name 'e' does not exist in the current context
+2 target compilation errors:
+BC30451: 'FullImage' is not declared. It may be inaccessible due to its protection level.
+BC30451: 'e' is not declared. It may be inaccessible due to its protection level.", expectCompilationErrors: true);
+        }
+
+        /// <summary>
+        /// Intentionally unknown type used to ensure imperfect compilation errs towards common case
+        /// </summary>
+        [Fact]
+        public async Task IfStatementSimilarToRaiseEventWithBracesAnotherAsync()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class TestClass
 {
     void TestMethod()
@@ -174,23 +293,23 @@ End Class");
             DrawImage()
         End If
     End Sub
-End Class");
-            TestConversionCSharpToVisualBasic(
-                @"class TestClass
-{
-    void TestMethod()
-    {
-        if (FullImage != null) { e.DrawImage(); }
-    }
-}", @"Friend Class TestClass
-    Private Sub TestMethod()
-        If FullImage IsNot Nothing Then
-            e.DrawImage()
-        End If
-    End Sub
-End Class");
-            // another bug related to the IfStatement code:
-            TestConversionCSharpToVisualBasic(
+End Class
+
+2 source compilation errors:
+CS0103: The name 'FullImage' does not exist in the current context
+CS0103: The name 'DrawImage' does not exist in the current context
+2 target compilation errors:
+BC30451: 'FullImage' is not declared. It may be inaccessible due to its protection level.
+BC30451: 'DrawImage' is not declared. It may be inaccessible due to its protection level.", expectCompilationErrors: true);
+        }
+
+        /// <summary>
+        /// Intentionally unknown type used to ensure imperfect compilation errs towards common case
+        /// </summary>
+        [Fact]
+        public async Task IfStatementSimilarToRaiseEventAnother2Async()
+        {
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class TestClass
 {
     void TestMethod()
@@ -206,7 +325,16 @@ End Class");
             Next
         End If
     End Sub
-End Class");
+End Class
+
+3 source compilation errors:
+CS0103: The name 'Tiles' does not exist in the current context
+CS0246: The type or namespace name 'Tile' could not be found (are you missing a using directive or an assembly reference?)
+CS1061: 'TestClass' does not contain a definition for 'TileTray' and no accessible extension method 'TileTray' accepting a first argument of type 'TestClass' could be found (are you missing a using directive or an assembly reference?)
+3 target compilation errors:
+BC30451: 'Tiles' is not declared. It may be inaccessible due to its protection level.
+BC30002: Type 'Tile' is not defined.
+BC30456: 'TileTray' is not a member of 'TestClass'.", expectCompilationErrors: true);
         }
 
         /// <summary>
@@ -215,9 +343,11 @@ End Class");
         /// This means Funcs/Actions need to be wrapped in a typed constructor such as New Action(Of String)
         /// </summary>
         [Fact]
-        public void AddressOfWhereVbTypeInferenceIsWeaker()
+        public async Task AddressOfWhereVbTypeInferenceIsWeakerAsync()
         {
-            TestConversionCSharpToVisualBasic(@"static class TestClass
+            await TestConversionCSharpToVisualBasicAsync(@"using System;
+
+static class TestClass
 {
     private static object TypeSwitch(this object obj, Func<string, object> matchFunc1, Func<int, object> matchFunc2, Func<object, object> defaultFunc)
     {
@@ -238,7 +368,8 @@ End Class");
     {
         return node.TypeSwitch(ConvertString, ConvertInt, _ => throw new NotImplementedException($""Conversion for '{node.GetType()}' not implemented""));
     }
-}", @"Imports System.Runtime.CompilerServices
+}", @"Imports System
+Imports System.Runtime.CompilerServices
 
 Friend Module TestClass
     <Extension()>
@@ -254,24 +385,278 @@ Friend Module TestClass
         Return node
     End Function
 
-    Function Convert(ByVal node As Object) As Object
+    Public Function Convert(ByVal node As Object) As Object
         Return node.TypeSwitch(New Func(Of String, Object)(AddressOf ConvertString), New Func(Of Integer, Object)(AddressOf ConvertInt), Function(__)
-                                                                                                                                             Throw New NotImplementedException($""Conversion for '{node.[GetType]()}' not implemented"")
+                                                                                                                                             Throw New NotImplementedException($""Conversion for '{node.GetType()}' not implemented"")
                                                                                                                                          End Function)
     End Function
 End Module");
         }
 
         [Fact]
-        public void HexAndBinaryLiterals()
+        public async Task HexAndBinaryLiteralsAsync()
         {
-            TestConversionCSharpToVisualBasic(
+            await TestConversionCSharpToVisualBasicAsync(
                 @"class Test
 {
     public int CR = 0x0D * 0b1;
 }", @"Friend Class Test
     Public CR As Integer = &H0D * &B1
 End Class");
+        }
+
+        [Fact]
+        public async Task CaseConflict_LocalWithLocalAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"void Test() {
+    object aB = 5;
+    int Ab = (int) o;
+}",
+                @"Private Sub Test()
+    Dim l_AB As Object = 5
+    Dim Ab As Integer = CInt(o)
+End Sub
+
+1 source compilation errors:
+CS0103: The name 'o' does not exist in the current context
+1 target compilation errors:
+BC30451: 'o' is not declared. It may be inaccessible due to its protection level.");
+        }
+        [Fact]
+        public async Task CaseConflict_LocalWithLocalInMethodAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"void Test() {
+    object test = 5;
+    int tesT = (int) o;
+}",
+                @"Private Sub Test()
+    Dim l_Test1 As Object = 5
+    Dim l_TesT As Integer = CInt(o)
+End Sub
+
+1 source compilation errors:
+CS0103: The name 'o' does not exist in the current context
+1 target compilation errors:
+BC30451: 'o' is not declared. It may be inaccessible due to its protection level.");
+        }
+        [Fact]
+        public async Task CaseConflict_LocalWithLocalInPropertyAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"public int Test {
+    get {
+        object test = 5;
+        int tesT = (int) o;
+        return test;
+    }
+}",
+                @"Public ReadOnly Property Test As Integer
+    Get
+        Dim l_Test1 As Object = 5
+        Dim l_TesT As Integer = CInt(o)
+        Return l_Test1
+    End Get
+End Property
+
+2 source compilation errors:
+CS0103: The name 'o' does not exist in the current context
+CS0266: Cannot implicitly convert type 'object' to 'int'. An explicit conversion exists (are you missing a cast?)
+1 target compilation errors:
+BC30451: 'o' is not declared. It may be inaccessible due to its protection level.");
+        }
+
+        [Fact]
+        public async Task CaseConflict_LocalWithLocalInEventAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"class TestClass {
+    System.EventHandler test;
+
+    public event System.EventHandler Test {
+        add {
+            object teSt = 5;
+            int tesT = (int)o;
+            test += value;
+        }
+        remove {
+            object teSt = 5;
+            int tesT = (int)o;
+            test -= value;
+        }
+    }
+}",
+                @"Friend Class TestClass
+    Private f_Test As EventHandler
+
+    Public Custom Event Test As EventHandler
+        AddHandler(ByVal value As EventHandler)
+            Dim l_TeSt1 As Object = 5
+            Dim l_TesT As Integer = CInt(o)
+            f_Test = [Delegate].Combine(f_Test, value)
+        End AddHandler
+        RemoveHandler(ByVal value As EventHandler)
+            Dim l_TeSt1 As Object = 5
+            Dim l_TesT As Integer = CInt(o)
+            f_Test = [Delegate].Remove(f_Test, value)
+        End RemoveHandler
+        RaiseEvent(ByVal sender As Object, ByVal e As EventArgs)
+            f_Test?(sender, e)
+        End RaiseEvent
+    End Event
+End Class
+
+1 source compilation errors:
+CS0103: The name 'o' does not exist in the current context
+3 target compilation errors:
+BC36637: The '?' character cannot be used here.
+BC30451: 'o' is not declared. It may be inaccessible due to its protection level.
+BC30451: '[Delegate]' is not declared. It may be inaccessible due to its protection level.");
+        }
+        [Fact]
+        public async Task CaseConflict_LocalWithArgumentMethodAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"int Method(object test) {
+    int tesT = (int)test;
+    return tesT;
+}",
+                @"Private Function Method(ByVal test As Object) As Integer
+    Dim l_TesT As Integer = test
+    Return l_TesT
+End Function");
+        }
+        [Fact]
+        public async Task NonConflictingArgument_PropertyAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"public class TestClass {
+    public int Value {
+        get { return GetValue(); }
+        set { SetValue(value) }
+    }
+    int GetValue() { return 0; }
+    void SetValue(int value) { }
+}",
+@"Public Class TestClass
+    Public Property Value As Integer
+        Get
+            Return GetValue()
+        End Get
+        Set(ByVal value As Integer)
+            SetValue(value)
+        End Set
+    End Property
+
+    Private Function GetValue() As Integer
+        Return 0
+    End Function
+
+    Private Sub SetValue(ByVal value As Integer)
+    End Sub
+End Class
+
+1 source compilation errors:
+CS1002: ; expected");
+        }
+        [Fact]
+        public async Task NonConflictingArgument_EventAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"using System;
+
+public class TestClass {
+    EventHandler value;
+    public event EventHandler Value {
+        add { this.value += value; }
+        remove { this.value -= value; }
+    }
+}",
+@"Imports System
+
+Public Class TestClass
+    Private f_Value As EventHandler
+
+    Public Custom Event Value As EventHandler
+        AddHandler(ByVal value As EventHandler)
+            f_Value = [Delegate].Combine(f_Value, value)
+        End AddHandler
+        RemoveHandler(ByVal value As EventHandler)
+            f_Value = [Delegate].Remove(f_Value, value)
+        End RemoveHandler
+        RaiseEvent(ByVal sender As Object, ByVal e As EventArgs)
+            f_Value?(sender, e)
+        End RaiseEvent
+    End Event
+End Class
+
+2 target compilation errors:
+BC36637: The '?' character cannot be used here.
+BC30451: '[Delegate]' is not declared. It may be inaccessible due to its protection level.");
+        }
+        [Fact]
+        public async Task CaseConflict_FieldAndInterfacePropertyAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"public interface IInterface {
+    int Prop { get; set; }
+}
+public class TestClass : IInterface {
+    int prop;
+    int IInterface.Prop {
+        get { return prop; }
+        set { prop = value;}
+    }
+}",
+@"Public Interface IInterface
+    Property Prop As Integer
+End Interface
+
+Public Class TestClass
+    Implements IInterface
+
+    Private f_Prop As Integer
+
+    Private Property Prop As Integer Implements IInterface.Prop
+        Get
+            Return f_Prop
+        End Get
+        Set(ByVal value As Integer)
+            f_Prop = value
+        End Set
+    End Property
+End Class");
+        }
+        [Fact]
+        public async Task CaseConflict_ForeignNamespaceAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"namespace System {
+    public class TestClass {
+        int test;
+        public int Test { get { return test; } }
+    }
+}",
+                @"Namespace System
+    Public Class TestClass
+        Private f_Test As Integer
+
+        Public ReadOnly Property Test As Integer
+            Get
+                Return f_Test
+            End Get
+        End Property
+    End Class
+End Namespace");
+        }
+
+        [Fact]
+        public async Task ConstantsShouldBeQualifiedAsync() {
+            await TestConversionCSharpToVisualBasicAsync(
+@"public class TestClass {
+    public void Method() {
+        string vbLf = ""\n"";
+        string vbCrLf = ""\r\n"";
+    }
+}",
+@"Public Class TestClass
+    Public Sub Method()
+        Dim vbLf As String = Microsoft.VisualBasic.vbLf
+        Dim vbCrLf As String = Microsoft.VisualBasic.vbCrLf
+    End Sub
+End Class", conversionOptions: EmptyNamespaceOptionStrictOff);
         }
     }
 }
